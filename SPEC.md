@@ -31,10 +31,16 @@ endless-runner/
 ├── style.css           # UI styling (HUD, menus, pause, game over)
 ├── game.js             # Entry point: game loop, state, input, world, UI wiring
 ├── js/
-│   └── logic/          # Pure, DOM-free game rules (spawner, collision, physics, scoring, RNG…) — see ADR-0001
-│       ├── config.js   # The single frozen CONFIG object of tuning values
-│       ├── rng.js      # Seeded RNG (mulberry32)
-│       └── time.js     # Frame-delta clamping
+│   ├── logic/          # Pure, DOM-free game rules (spawner, collision, physics, scoring, RNG…) — see ADR-0001
+│   │   ├── config.js   # The single frozen CONFIG object of tuning values
+│   │   ├── rng.js      # Seeded RNG (mulberry32)
+│   │   ├── time.js     # Frame-delta clamping
+│   │   ├── loop.js     # Fixed-timestep accumulator (ADR-0005)
+│   │   ├── math.js     # clamp / lerp / ease / mod / damp
+│   │   ├── world.js    # Ground-segment recycling, lane x positions
+│   │   ├── player.js   # Lanes, jump, slide, fast-fall rules
+│   │   └── input.js    # Key → action mapping
+│   └── palette.js      # Color palette (mirrored as CSS vars in style.css)
 ├── tests/              # node --test 'tests/*.test.js'  (Node built-in runner, dev-only — see ADR-0002, ADR-0004)
 ├── docs/
 │   ├── adr/            # Architecture Decision Records
@@ -79,14 +85,14 @@ A hacker in black is fleeing through the ruins of a futuristic city. A governmen
 ### 3.2 Lanes & movement
 - **3 lanes** (left / center / right), about 2.5 units apart.
 - The player stays at a fixed Z position. **The world scrolls toward the player.** This avoids floating-point drift on long runs and makes object recycling simple.
-- Lane changes are animated with a short lerp (about 0.12 s). They can be queued: pressing left twice quickly moves two lanes.
+- Lane changes are animated with a short ease-out (0.12 s per lane). They can be queued: pressing left twice quickly moves two lanes (up to 2 queued moves). Pressing the opposite direction mid-move turns straight back, and pressing opposite to a queued move cancels it. Moves off the road edge are ignored.
 
 ### 3.3 Actions
 | Action | Keys | Behavior |
 |---|---|---|
 | Move left / right | `←` `→` / `A` `D` | Switch lanes |
-| Jump | `↑` / `W` / `Space` | Parabolic jump (about 0.7 s airtime) |
-| Slide / duck | `↓` / `S` | Lower the hitbox for about 0.7 s. If pressed in the air, fast-fall into a slide. |
+| Jump | `↑` / `W` / `Space` | Parabolic jump (0.7 s airtime, 2.2 apex). No double jump. A jump pressed up to 0.1 s before landing fires on landing. Jumping cancels a slide. |
+| Slide / duck | `↓` / `S` | Lower the hitbox (1.8 → 0.8) for 0.7 s. If pressed in the air, fast-fall (25 units/s down) into a slide. In the air, the latest of jump/slide wins. |
 | Pause | `Esc` / `P` | Toggle pause |
 | (Later) Touch | Swipe up/down/left/right | Same as keys, for phones and tablets |
 
@@ -191,11 +197,13 @@ Audio starts only after the first user click (browser autoplay rules). The mute 
 ## 7. Technical Design
 
 ### 7.1 Main loop
+Fixed-timestep simulation with render interpolation (ADR-0005):
 ```
-requestAnimationFrame(loop)
-  dt = min(clock.getDelta(), 1/20)   // clamp so a tab switch can't cause a huge step
-  if state === PLAYING: update(dt)
-  render()
+renderer.setAnimationLoop(loop)
+  dt = clampDt(frameDelta, 1/20)          // clamp so a tab switch can't cause a huge step
+  n  = stepper.consume(dt)                // whole 1/120 s steps owed (max 8 per frame)
+  if state === PLAYING: repeat n times: simulate(1/120)
+  render(stepper.alpha())                 // blend prev → current state for smooth motion
 ```
 
 ### 7.2 Main pieces inside `game.js`
@@ -243,7 +251,8 @@ Each phase is roughly one prompt or session. Every phase ends with something you
 ### Phase 1: Core running
 - Scrolling ground segments (recycled). Placeholder player box in 3 lanes.
 - Lane switching, jump, slide/duck (with fast-fall), and a camera behind and above the player.
-- **Acceptance:** You can move, jump, and slide on an endless road that never runs out.
+- **Acceptance:**
+  - [x] You can move, jump, and slide on an endless road that never runs out *(verified 2026-11-17 in Chrome with real key presses; see handoff)*
 
 ### Phase 2: Obstacles, collision, difficulty
 - Placeholder low/high/block obstacles (color-coded boxes), pattern spawner with pooling.
