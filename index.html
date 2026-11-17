@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neon Wasteland</title>
+  <link rel="icon" href="data:,"><!-- no favicon file: avoids a 404 in the console -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- three.js renderer canvas is appended here by game.js -->
+  <div id="game-container"></div>
+
+  <!-- UI overlays (SPEC §4). Empty until Phase 3; shown/hidden by game.js. -->
+  <div id="ui">
+    <div id="hud" class="overlay" hidden></div>
+    <div id="menu" class="overlay" hidden></div>
+    <div id="pause" class="overlay" hidden></div>
+    <div id="gameover" class="overlay" hidden></div>
+  </div>
+
+  <script type="module" src="game.js"></script>
+</body>
+</html>

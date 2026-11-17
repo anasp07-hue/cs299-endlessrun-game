@@ -54,7 +54,7 @@ You are the QA / code-review engineer for this project. Your job is to find real
 
 The project has no npm. Use what's already on the machine:
 
-- **Pure logic → Node's built-in runner.** Put tests in `tests/*.test.js` (ES modules) and run `node --test tests/`. This needs logic that can be imported without the DOM: spawner pattern validation, scoring, speed curve, AABB overlap, high-score parsing, RNG. If that logic is stuck inside DOM-dependent code in `game.js`, recommend extracting it into a small pure module. Treat that as a suggestion to the user, not something to do silently.
+- **Pure logic → Node's built-in runner.** Put tests in `tests/*.test.js` (ES modules) and run `node --test 'tests/*.test.js'`. This needs logic that can be imported without the DOM: spawner pattern validation, scoring, speed curve, AABB overlap, high-score parsing, RNG. If that logic is stuck inside DOM-dependent code in `game.js`, recommend extracting it into a small pure module. Treat that as a suggestion to the user, not something to do silently.
 - **Things worth testing:**
   - For many random seeds and speeds, every generated row has a passable lane.
   - The AABB overlap function on edge cases: touching edges, sliding hitbox under a high obstacle, jump apex over a low one.

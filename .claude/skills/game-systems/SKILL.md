@@ -88,7 +88,7 @@ function saveHigh(v) { try { localStorage.setItem(KEY, String(Math.floor(v))); }
 Settings (mute, and later quality) use the same pattern under `neonWasteland.settings` as JSON, merged over the defaults.
 
 ## Testability
-Keep the core rules (RNG, pattern validation, AABB overlap, speed/score curves, high-score parsing) as **pure functions with no DOM or three.js access**, so `node --test tests/` can import them. See the `test-review` skill. If they live in `game.js` alongside DOM code, propose extracting them into a small module (e.g. `js/rules.js`) to the user.
+Keep the core rules (RNG, pattern validation, AABB overlap, speed/score curves, high-score parsing) as **pure functions with no DOM or three.js access**, so `node --test 'tests/*.test.js'` can import them. See the `test-review` skill. If they live in `game.js` alongside DOM code, propose extracting them into a small module (e.g. `js/rules.js`) to the user.
 
 ## Debug aids (dev only)
 A `?debug` URL flag that shows hitbox wireframes, current speed/difficulty/seed, and the pool sizes. It should cost nothing when the flag is off.

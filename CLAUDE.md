@@ -10,7 +10,7 @@ An offline 3D endless runner for the browser (three.js + plain HTML/CSS/JS, no b
 
 ```bash
 python3 -m http.server 8000   # play at http://localhost:8000 (file:// will NOT work)
-node --test tests/            # run the logic tests
+node --test 'tests/*.test.js' # run the logic tests
 ```
 
 Node is a **dev-only tool** for running tests. The game itself never needs Node, npm, or any network access (see ADR-0002).
@@ -35,13 +35,13 @@ Node is a **dev-only tool** for running tests. The game itself never needs Node,
 - Work only on the **current phase** in SPEC §9. Don't start the next phase or add features from later phases.
 - A phase is finished only when **every** item below is true:
   1. Its acceptance criteria in SPEC §9 are met and checked off in SPEC.
-  2. New logic has tests, and `node --test tests/` passes. Paste the real output; don't summarize it.
+  2. New logic has tests, and `node --test 'tests/*.test.js'` passes. Paste the real output; don't summarize it.
   3. The `test-review` skill has been run on the phase, including the in-browser smoke test.
   4. A handoff note is written (rule 6).
 - Then **stop and let the user review** before starting the next phase.
 
 ### 4. Tests after every stage
-- **Write tests along with the code**, not afterwards. After every stage, small or large, run `node --test tests/` and make sure it passes before going on.
+- **Write tests along with the code**, not afterwards. After every stage, small or large, run `node --test 'tests/*.test.js'` and make sure it passes before going on.
 - Tests go in `tests/*.test.js` as ES modules using `node:test` and `node:assert/strict`. No test frameworks, no npm.
 - **Never** delete, skip, or weaken a test just to get a pass. If a test is wrong, explain why before changing it.
 - Report test results honestly. If something fails or wasn't run, say so.

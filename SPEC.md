@@ -32,15 +32,19 @@ endless-runner/
 ├── game.js             # Entry point: game loop, state, input, world, UI wiring
 ├── js/
 │   └── logic/          # Pure, DOM-free game rules (spawner, collision, physics, scoring, RNG…) — see ADR-0001
-├── tests/              # node --test tests/  (Node built-in runner, dev-only — see ADR-0002)
+│       ├── config.js   # The single frozen CONFIG object of tuning values
+│       ├── rng.js      # Seeded RNG (mulberry32)
+│       └── time.js     # Frame-delta clamping
+├── tests/              # node --test 'tests/*.test.js'  (Node built-in runner, dev-only — see ADR-0002, ADR-0004)
 ├── docs/
 │   ├── adr/            # Architecture Decision Records
 │   └── handoffs/       # Session/phase handoff notes
 ├── CLAUDE.md           # Working rules for Claude Code
 ├── .gitignore          # Includes secrets (.env, keys) — never commit them
 ├── libs/
-│   ├── three.module.js # Vendored three.js (ES module build)
-│   └── three.core.js   # Required by three.module.js in r171+ (vendor both)
+│   ├── three.module.js # Vendored three.js r186.1 (ES module build) — see ADR-0003
+│   ├── three.core.js   # Required by three.module.js in r171+ (vendor both)
+│   └── three.LICENSE   # three.js MIT license
 └── assets/
     ├── models/         # Optional .glb models (not used at first, see §6)
     ├── textures/       # Small PNGs (screen glitch frames, ground decals)
@@ -59,7 +63,7 @@ python3 -m http.server 8000
 
 ### Running tests
 ```bash
-node --test tests/
+node --test 'tests/*.test.js'
 ```
 Node is used only as a dev tool for tests. The game itself never needs Node or npm (ADR-0002).
 
@@ -165,7 +169,7 @@ While paused, the game loop keeps rendering but stops simulating, and delta-time
 - Animations done in code: run cycle (swing limbs with a sine wave), jump pose, slide pose (body tilted back, low), stumble.
 
 **Chaser: "the Agent"**
-- Dark gray or black suit, white shirt, thin black tie, sunglasses, short hair.
+- Black suit, white shirt, thin black tie, sunglasses, short hair.
 - Same rig approach as the Hacker, with a stiffer, more mechanical run cycle.
 
 ---
@@ -226,13 +230,15 @@ requestAnimationFrame(loop)
 
 ## 9. Build Plan (iterative)
 
-Each phase is roughly one prompt or session. Every phase ends with something you can run and test. **A phase is not done until** its acceptance criteria are met, new logic has passing tests (`node --test tests/`), the `test-review` skill has been run, and a handoff note is written in `docs/handoffs/` (see `CLAUDE.md`). **Gameplay comes before art.** A fun game with gray boxes is easy to make pretty later. A pretty game that isn't fun is hard to fix.
+Each phase is roughly one prompt or session. Every phase ends with something you can run and test. **A phase is not done until** its acceptance criteria are met, new logic has passing tests (`node --test 'tests/*.test.js'`), the `test-review` skill has been run, and a handoff note is written in `docs/handoffs/` (see `CLAUDE.md`). **Gameplay comes before art.** A fun game with gray boxes is easy to make pretty later. A pretty game that isn't fun is hard to fix.
 
 ### Phase 0: Scaffold
 - Create the folder structure. Vendor `three.module.js` (+ `three.core.js`) into `libs/`.
 - `index.html` with canvas container and empty overlay divs. `style.css` reset. `game.js` with renderer, scene, camera, a lit test cube, resize handling, and the game loop.
 - Create `js/logic/` (with `config.js` and a seeded `rng.js`), `tests/` with a first passing test, and `docs/`.
-- **Acceptance:** `python3 -m http.server` shows a spinning cube with wifi **turned off**, and `node --test tests/` passes.
+- **Acceptance:**
+  - [x] `python3 -m http.server` shows a spinning cube with wifi **turned off** *(verified 2026-11-17: manually by the user with wifi off, and in headless Chrome with all non-localhost DNS blocked)*
+  - [x] `node --test 'tests/*.test.js'` passes
 
 ### Phase 1: Core running
 - Scrolling ground segments (recycled). Placeholder player box in 3 lanes.

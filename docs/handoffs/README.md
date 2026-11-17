@@ -16,7 +16,7 @@ Name it `YYYY-MM-DD-phaseN-short-topic.md`. Read the newest one at the start of 
 - Files touched: …
 
 ## Tests
-- `node --test tests/` → X passed / Y failed (paste the summary line)
+- `node --test 'tests/*.test.js'` → X passed / Y failed (paste the summary line)
 - Smoke test (test-review skill): done / not done, with results
 
 ## Decisions made
