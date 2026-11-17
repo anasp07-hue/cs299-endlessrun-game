@@ -13,7 +13,10 @@
 
   <!-- UI overlays (SPEC §4). Empty until Phase 3; shown/hidden by game.js. -->
   <div id="ui">
-    <div id="hud" class="overlay" hidden></div>
+    <div id="hud" class="overlay">
+      <!-- Phase 2 temporary readout; Phase 3 replaces it with the real HUD -->
+      <div id="dev-readout"></div>
+    </div>
     <div id="menu" class="overlay" hidden></div>
     <div id="pause" class="overlay" hidden></div>
     <div id="gameover" class="overlay" hidden></div>

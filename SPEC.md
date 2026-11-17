@@ -39,7 +39,10 @@ endless-runner/
 │   │   ├── math.js     # clamp / lerp / ease / mod / damp
 │   │   ├── world.js    # Ground-segment recycling, lane x positions
 │   │   ├── player.js   # Lanes, jump, slide, fast-fall rules
-│   │   └── input.js    # Key → action mapping
+│   │   ├── input.js    # Key → action mapping
+│   │   ├── difficulty.js # Speed curve, difficulty, score multiplier
+│   │   ├── collision.js # AABB boxes, player/obstacle hitboxes
+│   │   └── spawner.js  # Pattern table, fair row spacing, obstacle pool (ADR-0006)
 │   └── palette.js      # Color palette (mirrored as CSS vars in style.css)
 ├── tests/              # node --test 'tests/*.test.js'  (Node built-in runner, dev-only — see ADR-0002, ADR-0004)
 ├── docs/
@@ -106,13 +109,19 @@ Each obstacle has exactly one correct answer, like a classic runner:
 | **Full block** | Change lanes | Abandoned hover-car, collapsed pillar, rubble pile |
 
 Spawn rules:
-- Obstacles come in **rows** spaced along the track. A row never blocks all 3 lanes with full blocks. At least one lane is always passable.
-- Patterns come from a small hand-made list (e.g. "car-left + wires-center", "barrier across all 3 lanes") plus random single obstacles.
-- Minimum gap between rows scales with speed, so reaction time stays fair.
+- Obstacles come in **rows** spaced along the track. A row never blocks all 3 lanes with full blocks. At least one lane is always passable. Obstacles in a row are slightly **staggered** in depth (up to 0.1–0.3 s apart, more at higher difficulty), so rows don't read as flat walls.
+- Patterns come from a small hand-made list (e.g. "car-left + wires-center", "barrier across all 3 lanes") plus random single obstacles. Some rows (15% at the start, up to 40% at full difficulty) are instead generated **randomly lane by lane**, never all BLOCK and never empty (ADR-0007).
+- Minimum gap between rows scales with speed, so reaction time stays fair. Spacing is set in **seconds** at the speed the player will have when they reach the row (ADR-0007):
+  - The target gap eases from 1.35 s (easy) to 0.95 s (hard), randomly ±30% so the rhythm isn't uniform.
+  - **No dead ends:** from every open lane of a row, at least one lane of the next row must be reachable in time, and you must be past *every* obstacle on the way (in your own lane, lanes you cross, and the target lane, which matters because rows are staggered). That needs 0.55 s of reaction for any jump, slide, or lane change, plus about 0.08 s for a jump to lift you above a LOW; a full jump (0.7 s) if you just jumped and the next obstacle needs a jump or slide; and +0.12 s per lane change.
+  - A LOW followed by a LOW or HIGH in the same lane is never closer than a full jump.
+- **No idle lanes:** a lane can be empty for at most one row at a time. Any lane that was empty in a row gets an obstacle (LOW, HIGH, or BLOCK) in the next row, so you never sit in a lane with nothing to do for two rows (ADR-0007).
+- Patterns are written as 3-letter strings, one letter per lane: `L` LOW, `H` HIGH, `B` BLOCK, `.` empty (e.g. `B.B`, `LBH`). Each has a minimum difficulty and a weight.
+- Obstacle sizes (hitbox = visual): all 2.0 wide (lanes are 2.5, so a neighbouring lane never clips). LOW: 0.9 tall. HIGH: from 1.1 up to 2.5, above the 2.2 jump apex, so it can only be slid under. BLOCK: 2.6 tall.
 
 ### 3.5 Speed & difficulty
-- Start speed about 12 units/s. It increases steadily up to a cap (about 35 units/s).
-- Rows get denser and use harder patterns as distance increases.
+- Start speed 12 units/s. It increases by 0.11 units/s every second, up to a cap of 35 units/s (reached after about 3.5 minutes).
+- Rows get denser and use harder patterns as distance increases. Difficulty goes from 0 to 1 over the first 1,500 units (about 1:30 into a run). Some multi-obstacle rows (`B.B`, `LLL`, `HHH`, `L.L`, `H.H`) appear from the start.
 
 ### 3.6 Collision & the chaser
 - Collisions are box-vs-box (AABB) tests using simple hitboxes, not mesh geometry. The player's hitbox gets shorter while sliding.
@@ -256,9 +265,12 @@ Each phase is roughly one prompt or session. Every phase ends with something you
 
 ### Phase 2: Obstacles, collision, difficulty
 - Placeholder low/high/block obstacles (color-coded boxes), pattern spawner with pooling.
-- AABB collision with slide-aware hitbox. Head-on hit = game over (temporary: console log + freeze).
+- AABB collision with slide-aware hitbox. Head-on hit = game over (temporary: console log + freeze). Until Phase 4 adds the stumble, side clips also end the run.
 - Speed ramp, distance score.
-- **Acceptance:** You can play a full run. Every obstacle row is passable. The game gets harder over time.
+- **Acceptance:** *(verified 2026-11-17; see the Phase 2 handoff)*
+  - [x] You can play a full run (until caught; refresh to restart until Phase 3)
+  - [x] Every obstacle row is passable (a test bot that waits a full reaction time before changing lanes survives 4-minute runs on 12 seeds; an independent check confirms every open lane leaves the full reaction time over 20 seeds)
+  - [x] The game gets harder over time (speed ramp, denser rows, harder patterns)
 
 ### Phase 3: Game states, GUI, high score
 - Menu, HUD, pause (including auto-pause on blur), game over with Play Again. Full reset logic.

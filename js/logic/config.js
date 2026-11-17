@@ -24,8 +24,44 @@ export const CONFIG = Object.freeze({
   HEMI_INTENSITY: 1.4,
   SUN_INTENSITY: 1.6,
 
-  // --- Speed (SPEC §3.5; the ramp comes in Phase 2) ---
+  // --- Speed & difficulty (SPEC §3.5) ---
   SPEED_START: 12, // units per second
+  SPEED_MAX: 35,
+  SPEED_ACCEL: 0.11, // units/s per second: reaches SPEED_MAX after ~3.5 min
+  DIFFICULTY_DISTANCE: 1500, // distance at which difficulty reaches 1 (~1:30 into a run)
+
+  // --- Scoring (SPEC §3.7) ---
+  SCORE_MULT_DISTANCE: 500, // multiplier steps up every this many units
+  SCORE_MULT_STEP: 0.1, // ...by this much (1.0, 1.1, 1.2, …)
+
+  // --- Spawning & fairness (SPEC §3.4, ADR-0006) ---
+  SPAWN_AHEAD: 160, // rows appear beyond the camera far plane, so they never pop into view
+  DESPAWN_Z: 12, // obstacles are recycled once behind the camera
+  FIRST_ROW_DISTANCE: 60, // a calm start: ~5 s before the first row
+  REACTION_TIME: 0.55, // seconds needed before any new jump, slide, or lane change
+  ROW_TIME_EASY: 1.35, // target seconds between rows at difficulty 0 (before jitter)
+  ROW_TIME_HARD: 0.95, // target seconds between rows at difficulty 1 (fairness rules may push it out)
+  GAP_JITTER: 0.3, // each gap is randomly scaled by 1 ± this, so the rhythm isn't uniform
+  STAGGER_EASY: 0.1, // seconds: max depth spread of obstacles within one row, difficulty 0
+  STAGGER_HARD: 0.3, // ...and at difficulty 1
+  RANDOM_ROW_EASY: 0.15, // chance a row is generated lane-by-lane instead of from the table
+  RANDOM_ROW_HARD: 0.4,
+  RANDOM_ROW_FORCED: 0.5, // chance of a random row when 2+ lanes must be filled (else LLL/HHH dominate early)
+  RANDOM_W_NONE: 3, // per-lane weights for random rows (all-BLOCK / empty rows are re-rolled)
+  RANDOM_W_LOW: 2,
+  RANDOM_W_HIGH: 2,
+  RANDOM_W_BLOCK: 2,
+  MAX_OBSTACLES: 64, // pooled obstacle slots (~2x the most ever live); a row is skipped (never crashes) if full
+
+  // --- Obstacle sizes (hitbox = visual) ---
+  OBSTACLE_WIDTH: 2.0, // narrower than a lane (2.5), so neighbouring lanes never clip
+  LOW_HEIGHT: 0.9, // jump over
+  LOW_DEPTH: 1.0,
+  HIGH_BOTTOM: 1.1, // slide under: slide height (0.8) fits, standing (1.8) does not
+  HIGH_TOP: 2.5, // must stay above the jump apex (2.2) so it can't be jumped over
+  HIGH_DEPTH: 0.6,
+  BLOCK_HEIGHT: 2.6, // above the jump apex (2.2): must dodge
+  BLOCK_DEPTH: 2.0,
 
   // --- Lanes (SPEC §3.2) ---
   LANE_COUNT: 3,
@@ -45,6 +81,7 @@ export const CONFIG = Object.freeze({
   PLAYER_WIDTH: 0.9,
   PLAYER_HEIGHT: 1.8,
   PLAYER_SLIDE_HEIGHT: 0.8,
+  HITBOX_SCALE: 0.85, // collision box is 15% smaller than the visual, so near-misses feel lucky
 
   // --- Ground segments (recycled; SPEC §7.2 World) ---
   GROUND_SEGMENT_LENGTH: 20,

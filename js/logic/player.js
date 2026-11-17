@@ -15,6 +15,18 @@ export function jumpVelocity(cfg) {
   return (4 * cfg.JUMP_HEIGHT) / cfg.JUMP_TIME;
 }
 
+/**
+ * Seconds from take-off until the feet are above `height` (e.g. a LOW
+ * obstacle). Infinity if the jump never gets that high.
+ */
+export function jumpClearTime(height, cfg) {
+  const g = jumpGravity(cfg);
+  const v0 = jumpVelocity(cfg);
+  const disc = v0 * v0 - 2 * g * height;
+  if (disc < 0) return Infinity;
+  return (v0 - Math.sqrt(disc)) / g;
+}
+
 export function createPlayer(cfg) {
   const p = {
     // Lanes. `lane` is the lane we are in or moving to; `fromLane` is where the
