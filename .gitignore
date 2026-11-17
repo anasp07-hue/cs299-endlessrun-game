@@ -1,0 +1,28 @@
+# --- Secrets: never commit ---
+.env
+.env.*
+!.env.example
+*.local.*
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+service-account*.json
+
+# --- Claude Code local (per-user) settings ---
+.claude/settings.local.json
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
+
+# --- Dev tooling (the game itself has no npm dependencies) ---
+node_modules/
+coverage/
+*.log
