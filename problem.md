@@ -3,3 +3,5 @@ Problem
 
 Initial Requirments
 - Able to run completly offline, game can't be super heavyweight and all game logic and processes can run in locally in the browser of any modern computer
+- Actually fun and enjoyable
+- Has things that make you want to keep playing like a highscore
