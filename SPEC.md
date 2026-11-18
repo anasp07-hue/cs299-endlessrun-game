@@ -267,13 +267,14 @@ renderer.setAnimationLoop(loop)
 ---
 
 ## 8. Definition of "Done" for v1
-- [ ] Runs offline from a local static server in current Chrome, Firefox, Safari, and Edge
-- [ ] 3 obstacle types, each with one clear correct action
-- [ ] Hacker runner and Agent chaser with visible run animations
-- [ ] Wasteland city with broken screens, hanging wires, abandoned cars
-- [ ] Menu, HUD, pause, and game over/play-again screens all work
-- [ ] High score persists across browser restarts
-- [ ] Steady 60 fps on a typical laptop
+*(All met as of 2026-11-18: phases 0–8 verified in Chrome; the user confirmed the cross-browser check, play-testing and tuning.)*
+- [x] Runs offline from a local static server in current Chrome, Firefox, Safari, and Edge
+- [x] 3 obstacle types, each with one clear correct action
+- [x] Hacker runner and Agent chaser with visible run animations
+- [x] Wasteland city with broken screens, hanging wires, abandoned cars
+- [x] Menu, HUD, pause, and game over/play-again screens all work
+- [x] High score persists across browser restarts
+- [x] Steady 60 fps on a typical laptop
 
 ---
 
