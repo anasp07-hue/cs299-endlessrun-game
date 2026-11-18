@@ -207,6 +207,32 @@ export const CONFIG = Object.freeze({
   DUST_AREA_Z: 70,
   DUST_DRIFT: 0.35, // units/s of slow sideways drift
 
+  // --- Audio & juice (SPEC §9 Phase 7, ADR-0015) ---
+  NEAR_MISS_MARGIN: 0.3, // an obstacle that passes within this gap of the player (no hit) is a near miss
+  SHAKE_DECAY: 1.8, // trauma lost per second
+  SHAKE_MAX_OFFSET: 0.32, // camera shake at full trauma (units)
+  SHAKE_MAX_ROLL: 0.035, // ...and roll (radians)
+  SHAKE_FREQ: 24, // how fast the shake wobbles
+  TRAUMA_STUMBLE: 0.6,
+  TRAUMA_CATCH: 0.95,
+  TRAUMA_LAND: 0.25, // × landing strength
+  TRAUMA_NEAR_MISS: 0.15,
+  SQUASH_TIME: 0.18, // landing squash recovers over this long
+  SQUASH_AMOUNT: 0.22, // at full strength the Hacker squashes 22% shorter
+  NEAR_MISS_FLASH_TIME: 0.18,
+  NEAR_MISS_FLASH_PEAK: 0.6, // opacity of the cold screen flicker (edges + scanlines only: the centre stays clear)
+  SPARK_MAX: 160, // pooled spark particles
+  SPARK_GRAVITY: 14,
+  SPARK_DRAG: 1.4,
+  SPARK_LIFE_MIN: 0.35,
+  SPARK_LIFE_MAX: 0.8,
+  SPARK_SIZE: 0.24,
+  SPARK_AMBIENT_RATE: 7, // sparks per second dripping from each HIGH obstacle's live cable nearby
+  SPARK_AMBIENT_RANGE: 45, // ...when it is closer than this
+  MUSIC_BPM: 92,
+  MUSIC_VOLUME: 0.32,
+  SFX_VOLUME: 0.55,
+
   // --- Ground segments (recycled; SPEC §7.2 World) ---
   GROUND_SEGMENT_LENGTH: 20,
   GROUND_SEGMENT_COUNT: 10, // 200 units: far edge always past the camera far plane (no pop-in)

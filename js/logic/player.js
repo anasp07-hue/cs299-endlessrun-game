@@ -58,6 +58,13 @@ export function createPlayer(cfg) {
     // Slide
     sliding: false,
     slideTimer: 0,
+
+    // Event counters for sound and effects (Phase 7): the view compares them
+    // with what it last saw, so no event list (and no allocation) is needed.
+    jumps: 0,
+    landings: 0,
+    landSpeed: 0, // downward speed at the last touchdown
+    slides: 0,
   };
   resetPlayer(p, cfg);
   return p;
@@ -87,6 +94,10 @@ export function resetPlayer(p, cfg) {
   p.slideOnLand = false;
   p.sliding = false;
   p.slideTimer = 0;
+  p.jumps = 0;
+  p.landings = 0;
+  p.landSpeed = 0;
+  p.slides = 0;
 }
 
 function startLaneMove(p, dir, cfg) {
@@ -151,6 +162,7 @@ export function bounceBack(p, cfg) {
 }
 
 function doJump(p, cfg) {
+  p.jumps++;
   p.vy = jumpVelocity(cfg);
   p.grounded = false;
   p.sliding = false;
@@ -160,6 +172,7 @@ function doJump(p, cfg) {
 }
 
 function startSlide(p, cfg) {
+  if (!p.sliding) p.slides++; // a fresh slide, not an extension
   p.sliding = true;
   p.slideTimer = cfg.SLIDE_TIME;
 }
@@ -219,6 +232,8 @@ export function stepPlayer(p, dt, cfg) {
     p.y += p.vy * dt - 0.5 * g * dt * dt;
     p.vy -= g * dt;
     if (p.y <= 0) {
+      p.landings++;
+      p.landSpeed = -p.vy;
       p.y = 0;
       p.vy = 0;
       p.grounded = true;

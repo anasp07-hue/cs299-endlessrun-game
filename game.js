@@ -1,4 +1,8 @@
 // Apocalypse Run — browser entry point.
+// Phase 7: audio and juice (js/audio.js generates every sound in code;
+// js/logic/juice.js + particles.js, ADR-0015): SFX, a generative music loop,
+// mute (M / buttons, saved), camera shake, landing squash, sparks, and a
+// screen flicker on near misses.
 // Phase 6: themed obstacles (js/obstacleModels.js, ADR-0014): fallen screens /
 // striped barriers (LOW), hanging billboards / cable beams (HIGH), crashed
 // hover-cars / broken pillars (BLOCK), each fitted to its hitbox.
@@ -22,6 +26,7 @@ import { createFixedStepper } from './js/logic/loop.js';
 import { lerp, damp, easeOutQuad } from './js/logic/math.js';
 import { segmentZ, laneX } from './js/logic/world.js';
 import { actionForKeyEvent } from './js/logic/input.js';
+import { createRng } from './js/logic/rng.js';
 import { queueLaneMove, requestJump, requestSlide, jumpVelocity } from './js/logic/player.js';
 import { difficultyAt } from './js/logic/difficulty.js';
 import { OB } from './js/logic/collision.js';
@@ -34,7 +39,13 @@ import {
   agentRun, agentAir, agentSlide, agentReach, hitWeight, hitOverlay,
 } from './js/logic/pose.js';
 import { createHacker, createAgent, applyPose } from './js/characters.js';
-import { createCity, makeRoadTexture, applySkyFog } from './js/city.js';
+import { createCity, makeRoadTexture, applySkyFog, softDotTexture } from './js/city.js';
+import { createAudio } from './js/audio.js';
+import { loadSettings, saveSettings } from './js/logic/settings.js';
+import {
+  createShake, resetShake, addTrauma, stepShake, shakeOffset, squashScale, landingStrength, nearMissFlash,
+} from './js/logic/juice.js';
+import { createSparks, clearSparks, emitSparks, stepSparks, sparkFade } from './js/logic/particles.js';
 import { buildObstacleModels, obstacleVariant, OBSTACLE_VARIANTS } from './js/obstacleModels.js';
 import {
   STATE, CMD, nextState, startsNewRun, commandFor, shouldAutoPause, canRestart, abandonsRun,
@@ -165,6 +176,7 @@ try {
   storage = null; // the game still works; it just won't remember the high score
 }
 let highScore = loadHighScore(storage);
+const settings = loadSettings(storage); // { muted }
 
 // --- UI elements --------------------------------------------------------------
 const $ = (id) => document.getElementById(id);
@@ -280,7 +292,10 @@ function dispatch(cmd) {
   if (cmd === CMD.PAUSE) freezeInterpolation(run); // pause shows the latest frame exactly
   if (cmd === CMD.MENU) resetRun(run, CONFIG, nextSeed()); // menu shows a clean road
   if (cmd === CMD.CAUGHT) onRunEnded();
-  if (startsNewRun(from, cmd) || cmd === CMD.MENU) resetCharacterView();
+  if (startsNewRun(from, cmd) || cmd === CMD.MENU) {
+    resetCharacterView();
+    resetFx();
+  }
   if (to === STATE.PLAYING) stepper.reset(); // no time debt carried into the run or across a pause
   if (to === STATE.MENU) {
     syncHighScore();
@@ -288,6 +303,7 @@ function dispatch(cmd) {
   }
 
   state = to;
+  audio.setDuck(MUSIC_DUCK[to]);
   releaseFocus();
   showScreens(to);
   if (to === STATE.PLAYING || to === STATE.PAUSED) updateHud();
@@ -349,6 +365,7 @@ function onKeyDown(e) {
   else if (cmd === CMD.RIGHT) queueLaneMove(p, 1, CONFIG);
   else if (cmd === CMD.JUMP) requestJump(p, CONFIG);
   else if (cmd === CMD.SLIDE) requestSlide(p, CONFIG);
+  else if (cmd === CMD.MUTE) toggleMute();
   else if (cmd !== CMD.NONE) dispatch(cmd); // PLAY / PAUSE / RESUME
 }
 window.addEventListener('keydown', onKeyDown);
@@ -360,7 +377,10 @@ window.addEventListener('keyup', (e) => {
 
 // Buttons: each wired once at startup (never per visit, so no duplicate handlers).
 function onClick(id, cmd) {
-  $(id).addEventListener('click', () => dispatch(cmd));
+  $(id).addEventListener('click', () => {
+    audio.click();
+    dispatch(cmd);
+  });
 }
 onClick('btn-play', CMD.PLAY);
 onClick('btn-pause', CMD.PAUSE);
@@ -370,8 +390,16 @@ onClick('btn-pause-menu', CMD.MENU);
 // Play Again honours the same short delay as Enter/Space: the button may have
 // keyboard focus, and Enter/Space on a focused button bypasses the key handler.
 $('btn-again').addEventListener('click', () => {
-  if (canRestart(gameOverAge, CONFIG)) dispatch(CMD.PLAY);
+  if (!canRestart(gameOverAge, CONFIG)) return;
+  audio.click();
+  dispatch(CMD.PLAY);
 });
+for (const el of document.querySelectorAll('.js-mute')) {
+  el.addEventListener('click', () => {
+    toggleMute();
+    audio.click();
+  });
+}
 onClick('btn-over-menu', CMD.MENU);
 
 // Auto-pause when the tab or window loses focus, but only mid-run (SPEC §4).
@@ -381,7 +409,193 @@ function autoPause() {
 window.addEventListener('blur', autoPause);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) autoPause();
+  audio.setHidden(document.hidden); // no music piling up in a background tab
 });
+
+// --- Audio (js/audio.js, ADR-0015) --------------------------------------------
+// Created now, but silent until the first click or key press (browser autoplay rules).
+const audio = createAudio(CONFIG);
+audio.setMuted(settings.muted);
+const MUSIC_DUCK = {
+  [STATE.MENU]: 0.55,
+  [STATE.PLAYING]: 1,
+  [STATE.PAUSED]: 0.25,
+  [STATE.GAMEOVER]: 0.4,
+};
+audio.setDuck(MUSIC_DUCK[STATE.MENU]);
+function unlockAudio() {
+  audio.unlock();
+}
+window.addEventListener('pointerdown', unlockAudio, true);
+window.addEventListener('keydown', unlockAudio, true);
+
+const muteButtons = document.querySelectorAll('.js-mute');
+function showMute() {
+  for (const el of muteButtons) {
+    el.setAttribute('aria-pressed', String(settings.muted));
+    if (el.classList.contains('btn')) el.textContent = settings.muted ? 'SOUND: OFF' : 'SOUND: ON';
+  }
+}
+function toggleMute() {
+  settings.muted = !settings.muted;
+  audio.setMuted(settings.muted);
+  saveSettings(storage, settings); // fails quietly without storage: the toggle still works this session
+  showMute();
+}
+showMute();
+
+// --- Juice: shake, squash, sparks, near-miss flicker (js/logic/juice.js) -------
+// The run only counts events (jumps, landings, slides, stumbles, near misses,
+// the catch); this compares the counts with what it last saw each frame and
+// fires sound + effects. View state only: none of it affects the game.
+const shake = createShake();
+const shakeOut = { x: 0, y: 0, roll: 0 };
+const squash = { y: 1, xz: 1 };
+const sparks = createSparks(CONFIG.SPARK_MAX);
+const sparkRng = createRng(99);
+const fx = {
+  jumps: 0, landings: 0, slides: 0, stumbles: 0, near: 0, catching: false,
+  landAge: 99, landStrength: 0, flashAge: 99, lastScroll: NaN, flashShown: -1,
+};
+const flashEl = $('flash');
+
+// Spark particles: one Points draw call, colours fade per spark (additive, so black = invisible).
+const sparkGeo = new THREE.BufferGeometry();
+const sparkPos = new THREE.Float32BufferAttribute(new Float32Array(CONFIG.SPARK_MAX * 3), 3);
+const sparkCol = new THREE.Float32BufferAttribute(new Float32Array(CONFIG.SPARK_MAX * 3), 3);
+sparkGeo.setAttribute('position', sparkPos);
+sparkGeo.setAttribute('color', sparkCol);
+const sparkPoints = new THREE.Points(
+  sparkGeo,
+  new THREE.PointsMaterial({
+    size: CONFIG.SPARK_SIZE, map: softDotTexture(), vertexColors: true, transparent: true,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  }),
+);
+sparkPoints.frustumCulled = false;
+scene.add(sparkPoints);
+const sparkHot = new THREE.Color(PALETTE.sparkWhite);
+const sparkCool = new THREE.Color(PALETTE.glowBlue);
+
+function resetFx() {
+  const p = run.player;
+  fx.jumps = p.jumps;
+  fx.landings = p.landings;
+  fx.slides = p.slides;
+  fx.stumbles = run.chaser.stumbles;
+  fx.near = run.nearMisses;
+  fx.catching = run.chaser.catching;
+  fx.landAge = 99;
+  fx.landStrength = 0;
+  fx.flashAge = 99;
+  fx.lastScroll = NaN;
+  resetShake(shake);
+  clearSparks(sparks);
+}
+
+/** Fire sounds and effects for anything that happened since the last frame. */
+function updateFx(dt) {
+  const p = run.player;
+  const c = run.chaser;
+  if (p.jumps !== fx.jumps) {
+    fx.jumps = p.jumps;
+    audio.jump();
+  }
+  if (p.landings !== fx.landings) {
+    fx.landings = p.landings;
+    const s = landingStrength(p.landSpeed, JUMP_V0);
+    fx.landAge = 0;
+    fx.landStrength = s;
+    audio.land(s);
+    addTrauma(shake, CONFIG.TRAUMA_LAND * s * s);
+  }
+  if (p.slides !== fx.slides) {
+    fx.slides = p.slides;
+    audio.slide();
+  }
+  if (c.stumbles !== fx.stumbles) {
+    fx.stumbles = c.stumbles;
+    audio.stumble(c.stumbleDir);
+    addTrauma(shake, CONFIG.TRAUMA_STUMBLE);
+    // Sparks off the side that hit, flying the way the bounce goes.
+    emitSparks(sparks, p.x - c.stumbleDir * 0.45, 1.0, 0, 26, 6, 0.55, c.stumbleDir, sparkRng, CONFIG);
+  }
+  if (c.catching !== fx.catching) {
+    fx.catching = c.catching;
+    if (c.catching) {
+      audio.caught();
+      addTrauma(shake, CONFIG.TRAUMA_CATCH);
+      emitSparks(sparks, p.x, 1.1, 0, 34, 7, 0.6, 0, sparkRng, CONFIG);
+    }
+  }
+  if (run.nearMisses !== fx.near) {
+    fx.near = run.nearMisses;
+    fx.flashAge = 0;
+    const lx = laneX(run.nearMissLane, CONFIG.LANE_WIDTH, CONFIG.LANE_COUNT);
+    audio.nearMiss(Math.max(-0.8, Math.min(0.8, (lx - p.x) / CONFIG.LANE_WIDTH)));
+    addTrauma(shake, CONFIG.TRAUMA_NEAR_MISS);
+  }
+  // Effects age (and the world-attached sparks move) only while the run is live.
+  if (state === STATE.PLAYING) {
+    fx.landAge += dt;
+    fx.flashAge += dt;
+    stepShake(shake, dt, CONFIG);
+  }
+  audio.setIntensity((run.speed - CONFIG.SPEED_START) / (CONFIG.SPEED_MAX - CONFIG.SPEED_START));
+}
+
+/** Ambient sparks dripping from the live cables of HIGH obstacles ahead; a shower when you slide under. */
+function emitAmbientSparks(s, dt) {
+  const slots = run.spawner.slots;
+  const p = run.player;
+  for (let i = 0; i < slots.length; i++) {
+    const o = slots[i];
+    if (!o.active || o.type !== OB.HIGH) continue;
+    const z = s - o.s;
+    if (z < -CONFIG.SPARK_AMBIENT_RANGE || z > 3) continue;
+    const under = Math.abs(z) < 1.2 && o.lane === p.lane && p.sliding;
+    const rate = CONFIG.SPARK_AMBIENT_RATE * (under ? 5 : 1);
+    if (sparkRng.next() < rate * dt) {
+      const x = laneX(o.lane, CONFIG.LANE_WIDTH, CONFIG.LANE_COUNT) + sparkRng.range(-0.9, 0.9);
+      emitSparks(sparks, x, CONFIG.HIGH_BOTTOM, z, under ? 4 : 1 + sparkRng.int(2), 2.2, 0.1, 0, sparkRng, CONFIG);
+      if (z > -12) audio.crackle();
+    }
+  }
+}
+
+/** Per-frame effect rendering: sparks, the landing squash, the near-miss flicker. */
+function renderFx(s, dt) {
+  const live = state === STATE.PLAYING;
+  const delta = Number.isNaN(fx.lastScroll) ? 0 : s - fx.lastScroll;
+  fx.lastScroll = s;
+  if (live) {
+    emitAmbientSparks(s, dt);
+    stepSparks(sparks, dt, delta, CONFIG);
+  }
+  const a = sparkPos.array;
+  const col = sparkCol.array;
+  for (let i = 0; i < sparks.max; i++) {
+    const f = sparkFade(sparks, i);
+    a[i * 3] = sparks.x[i];
+    a[i * 3 + 1] = sparks.y[i];
+    a[i * 3 + 2] = sparks.z[i];
+    // Hot white-yellow when fresh, cooling to soft blue, then gone.
+    col[i * 3] = f * (sparkCool.r + (sparkHot.r - sparkCool.r) * f);
+    col[i * 3 + 1] = f * (sparkCool.g + (sparkHot.g - sparkCool.g) * f);
+    col[i * 3 + 2] = f * (sparkCool.b + (sparkHot.b - sparkCool.b) * f);
+  }
+  sparkPos.needsUpdate = true;
+  sparkCol.needsUpdate = true;
+
+  squashScale(fx.landAge, fx.landStrength, CONFIG, squash);
+  hacker.root.scale.set(squash.xz, squash.y, squash.xz);
+
+  const o = nearMissFlash(fx.flashAge, CONFIG);
+  if (o !== fx.flashShown) {
+    flashEl.style.opacity = o === 0 ? '0' : String(o); // only touched when it changes
+    fx.flashShown = o;
+  }
+}
 
 // --- Resize -----------------------------------------------------------------
 function onResize() {
@@ -498,12 +712,16 @@ function render(alpha, dt) {
 
   // Camera: behind and above, partly following the player's lane.
   cameraX = damp(cameraX, px * CONFIG.CAMERA_FOLLOW_X, CONFIG.CAMERA_FOLLOW_RATE, dt);
-  camera.position.x = cameraX;
+  shakeOffset(shake, CONFIG, shakeOut);
+  camera.position.x = cameraX + shakeOut.x;
+  camera.position.y = CONFIG.CAMERA_Y + shakeOut.y;
   camera.lookAt(cameraX, CONFIG.CAMERA_LOOK_Y, CONFIG.CAMERA_LOOK_Z);
+  if (shakeOut.roll !== 0) camera.rotateZ(shakeOut.roll);
 
   // City: chunks from the same interpolated scroll as the road and obstacles.
   if (state !== STATE.PAUSED) cityTime += dt;
   city.update(s, cityTime, camera);
+  renderFx(s, dt);
 
   renderer.render(scene, camera);
 }
@@ -523,6 +741,7 @@ function loop(now) {
   } else if (state === STATE.GAMEOVER) {
     gameOverAge += dt;
   }
+  updateFx(dt);
   render(alpha, dt);
 }
 
@@ -534,6 +753,7 @@ renderer.setAnimationLoop(loop);
 if (DEBUG) {
   window.__neon = {
     THREE, renderer, scene, camera, run, hacker, agent, roadSegments, city, debug, CMD, STATE,
+    audio, settings, shake, sparks, fx,
     getState: () => state,
     dispatch,
     getHighScore: () => highScore,

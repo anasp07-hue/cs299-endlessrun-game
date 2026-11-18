@@ -31,6 +31,7 @@ export const CMD = Object.freeze({
   RIGHT: 'RIGHT',
   JUMP: 'JUMP',
   SLIDE: 'SLIDE',
+  MUTE: 'MUTE', // toggle sound; never changes state (game.js handles it directly)
 });
 
 // Legal transitions: TRANSITIONS[from][cmd] = to. Anything missing is ignored.
@@ -78,6 +79,8 @@ export function startsNewRun(from, cmd) {
  * can't also make the player jump on the first frame.
  */
 export function commandFor(state, action, gameOverAge, cfg) {
+  // M toggles sound in every real state, even mid-run (an unknown state still does nothing).
+  if (action === ACTION.MUTE) return Object.prototype.hasOwnProperty.call(TRANSITIONS, state) ? CMD.MUTE : CMD.NONE;
   switch (state) {
     case STATE.MENU:
       return action === ACTION.CONFIRM || action === ACTION.JUMP ? CMD.PLAY : CMD.NONE;

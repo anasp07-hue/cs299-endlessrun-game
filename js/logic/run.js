@@ -11,6 +11,7 @@ import {
 } from './chaser.js';
 import { createSpawner, resetSpawner, updateSpawner, findHit } from './spawner.js';
 import { createBox, setPlayerBox } from './collision.js';
+import { trackNearMisses } from './spawner.js';
 import { createTrail, resetTrail, pushTrail } from './trail.js';
 import { speedAt, addScore } from './difficulty.js';
 
@@ -26,6 +27,9 @@ export function createRun(cfg, seed = 0) {
     caughtBy: CAUGHT_BY.NONE,
     hitSlot: -1, // spawner slot that ended the run, or -1
     clipSlot: -1, // slot side-clipped by the current bounce (ignored until the bounce ends), or -1
+    nearMisses: 0, // near-miss count (Phase 7 effects compare it with what they last saw)
+    nearMissType: 0, // obstacle type of the latest near miss
+    nearMissLane: 0,
     player: createPlayer(cfg),
     chaser: createChaser(cfg),
     trail: createTrail(cfg.TRAIL_STEPS), // the player's recent path, which the Agent follows
@@ -49,6 +53,9 @@ export function resetRun(run, cfg, seed) {
   run.caughtBy = CAUGHT_BY.NONE;
   run.hitSlot = -1;
   run.clipSlot = -1;
+  run.nearMisses = 0;
+  run.nearMissType = 0;
+  run.nearMissLane = 0;
   resetPlayer(run.player, cfg);
   resetChaser(run.chaser, cfg);
   resetTrail(run.trail, run.player.x);
@@ -133,6 +140,14 @@ export function stepRun(run, h, cfg, god = false) {
     }
     bounceBack(p, cfg);
     hit = findHit(sp, run.playerBox, run.scroll, cfg, run.scratchBox);
+  }
+  if (!c.catching) {
+    const near = trackNearMisses(sp, run.playerBox, run.scroll, cfg.NEAR_MISS_MARGIN, cfg, run.scratchBox);
+    if (near >= 0) {
+      run.nearMisses++;
+      run.nearMissType = sp.slots[near].type;
+      run.nearMissLane = sp.slots[near].lane;
+    }
   }
   return first;
 }

@@ -9,6 +9,7 @@ export const ACTION = Object.freeze({
   SLIDE: 'SLIDE',
   PAUSE: 'PAUSE', // Esc / P: toggle pause (SPEC §3.3)
   CONFIRM: 'CONFIRM', // Enter: Play / Play Again (Space also confirms on menus, via JUMP)
+  MUTE: 'MUTE', // M: toggle sound, in any state (Phase 7)
 });
 
 const KEY_TO_ACTION = Object.freeze({
@@ -25,6 +26,7 @@ const KEY_TO_ACTION = Object.freeze({
   KeyP: ACTION.PAUSE,
   Enter: ACTION.CONFIRM,
   NumpadEnter: ACTION.CONFIRM,
+  KeyM: ACTION.MUTE,
 });
 
 /**

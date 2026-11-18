@@ -278,7 +278,7 @@ function makeLightConeGeometry(cfg) {
   return g;
 }
 
-function softDotTexture() {
+export function softDotTexture() {
   const cv = canvas(32, 32);
   const ctx = cv.getContext('2d');
   const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);

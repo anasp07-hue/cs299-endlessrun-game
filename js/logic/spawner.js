@@ -224,7 +224,8 @@ export function createSpawner(cfg, seed = 0) {
   const slots = [];
   for (let i = 0; i < cfg.MAX_OBSTACLES; i++) {
     // ignored: side-clipped this pass, so it can't hit twice (ADR-0011)
-    slots.push({ active: false, type: OB.NONE, lane: 0, s: 0, row: 0, ignored: false });
+    // nearGap / nearDone: closest the player came during this pass, for near misses (Phase 7)
+    slots.push({ active: false, type: OB.NONE, lane: 0, s: 0, row: 0, ignored: false, nearGap: NEAR_NONE, nearDone: false });
   }
   const sp = {
     rng: createRng(seed),
@@ -266,6 +267,8 @@ export function resetSpawner(sp, cfg, seed = sp.rng.seed, startS = 0) {
     o.s = 0;
     o.row = 0;
     o.ignored = false;
+    o.nearGap = NEAR_NONE;
+    o.nearDone = false;
   }
   clearRow(sp.last);
   clearRow(sp.next);
@@ -306,6 +309,8 @@ function spawnRow(sp, row) {
     o.s = row.s[lane];
     o.row = sp.rows;
     o.ignored = false;
+    o.nearGap = NEAR_NONE;
+    o.nearDone = false;
     sp.active++;
   }
 }
@@ -470,6 +475,40 @@ export function updateSpawner(sp, scroll, speed, elapsed, cfg) {
     copyRow(sp.last, sp.next);
     planNext(sp, scroll, speed, elapsed, cfg);
   }
+}
+
+/** nearGap value meaning "never came close" (a plain number, so state stays JSON-clean). */
+export const NEAR_NONE = 1e9;
+
+/**
+ * Near misses: while an obstacle is passing the player (overlapping in z),
+ * remember the smallest gap between them across the lane and in height.
+ * Once it has fully passed, report it (once) if that gap stayed under
+ * `margin` and it never hit (or was side-clipped). Returns the slot index of
+ * a near miss completed this step, or -1. Allocation-free.
+ */
+export function trackNearMisses(sp, playerBox, scroll, margin, cfg, scratchBox) {
+  const reach = rowMargin(cfg);
+  let found = -1;
+  for (let i = 0; i < sp.slots.length; i++) {
+    const o = sp.slots[i];
+    if (!o.active || o.nearDone) continue;
+    const z = scroll - o.s;
+    if (z < -reach) continue; // still ahead
+    setObstacleBox(scratchBox, o.type, o.lane, z, cfg);
+    const b = scratchBox;
+    const sepZ = Math.max(b.minZ - playerBox.maxZ, playerBox.minZ - b.maxZ);
+    if (sepZ < 0) {
+      const sepX = Math.max(b.minX - playerBox.maxX, playerBox.minX - b.maxX);
+      const sepY = Math.max(b.minY - playerBox.maxY, playerBox.minY - b.maxY);
+      const gap = Math.max(sepX, sepY);
+      if (gap < o.nearGap) o.nearGap = gap;
+    } else if (z > 0) {
+      o.nearDone = true; // passed: decide once
+      if (!o.ignored && o.nearGap > 0 && o.nearGap < margin && found < 0) found = i;
+    }
+  }
+  return found;
 }
 
 /** Index of the first live, non-ignored obstacle overlapping `playerBox`, or -1. */

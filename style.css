@@ -96,7 +96,7 @@ body {
 }
 
 .hud-right {
-  right: 74px; /* leaves room for the pause button */
+  right: 124px; /* leaves room for the sound and pause buttons */
   align-items: flex-end;
 }
 
@@ -135,6 +135,73 @@ body {
   border: 1px solid var(--line);
   border-radius: 4px;
   cursor: pointer;
+}
+
+.hud-mute {
+  position: absolute;
+  top: 14px;
+  right: 68px;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.hud-mute:hover,
+.hud-mute:focus-visible {
+  border-color: var(--line-strong);
+  outline: none;
+}
+
+/* A small speaker drawn in CSS (no icon font, no image): a box and a cone,
+   with sound waves that disappear when muted. */
+.mute-icon {
+  position: relative;
+  width: 18px;
+  height: 14px;
+}
+
+.mute-icon::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 5px;
+  height: 6px;
+  background: var(--glow-blue);
+  box-shadow: 4px 0 0 0 var(--glow-blue);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+}
+
+.mute-icon::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 1px;
+  width: 6px;
+  height: 12px;
+  border: 2px solid var(--glow-blue);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  opacity: 0.85;
+}
+
+.js-mute[aria-pressed='true'] .mute-icon::after {
+  border-color: var(--danger-red);
+  border-radius: 0;
+  border-right: none;
+  border-top: 2px solid var(--danger-red);
+  width: 9px;
+  height: 0;
+  top: 6px;
+  left: 9px;
+  transform: rotate(45deg);
+  box-shadow: 0 0 0 0 transparent;
 }
 
 .pause-bar {
@@ -241,6 +308,27 @@ body {
   background: rgba(127, 182, 230, 0.08);
   color: var(--glow-pale);
   outline: none;
+}
+
+.btn-small {
+  font-size: 12px;
+  padding: 7px 12px;
+  color: var(--text-dim);
+}
+
+.js-mute.btn[aria-pressed='true'] {
+  color: var(--glow-pale);
+}
+
+/* --- Near-miss flicker ------------------------------------------------------ */
+#flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    repeating-linear-gradient(0deg, rgba(196, 215, 230, 0.16) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at center, transparent 40%, rgba(127, 182, 230, 0.75) 100%);
 }
 
 .btn-primary {

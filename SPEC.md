@@ -51,8 +51,12 @@ endless-runner/
 │   │   ├── run.js      # One run's state, its full reset, and the fixed step (ADR-0008)
 │   │   ├── state.js    # MENU/PLAYING/PAUSED/GAMEOVER transitions, key → command per state
 │   │   ├── highscore.js # High-score parsing and load/save through an injected storage
+│   │   ├── settings.js # Settings (mute) parsing and load/save under neonWasteland.settings (ADR-0015)
+│   │   ├── juice.js    # Camera-shake trauma, landing squash, near-miss flash (ADR-0015)
+│   │   ├── particles.js # Pooled spark particles (ADR-0015)
 │   │   └── hud.js      # Allocation-free digit writer for the HUD
 │   ├── characters.js   # View: Hacker and Agent THREE.Group rigs, applyPose (ADR-0012)
+│   ├── audio.js        # View: all SFX + a generative music loop, made with Web Audio in code (ADR-0015)
 │   ├── city.js         # View: sky dome + fog, ruined buildings, screens, cables, wrecks, dust, road texture (ADR-0013)
 │   ├── obstacleModels.js # View (DOM-free): themed LOW/HIGH/BLOCK models fitted to their hitboxes (ADR-0014)
 │   ├── geometry.js     # View (DOM-free): shared builders (coloured merges, hover-car, barrier, tubes)
@@ -112,6 +116,7 @@ A hacker in black is fleeing through the ruins of a futuristic city. A governmen
 | Jump | `↑` / `W` / `Space` | Parabolic jump (0.7 s airtime, 2.2 apex). No double jump. A jump pressed up to 0.1 s before landing fires on landing. Jumping cancels a slide. |
 | Slide / duck | `↓` / `S` | Lower the hitbox (1.8 → 0.8) for 0.7 s. If pressed in the air, fast-fall (25 units/s down) into a slide. In the air, the latest of jump/slide wins. |
 | Pause | `Esc` / `P` | Toggle pause |
+| Sound | `M` | Toggle sound on/off in any state (saved) |
 | (Later) Touch | Swipe up/down/left/right | Same as keys, for phones and tablets |
 
 ### 3.4 Obstacle types
@@ -172,9 +177,9 @@ All UI is HTML/CSS layered on top of the canvas (not drawn in three.js). It uses
 
 | Screen | Contents |
 |---|---|
-| **Main menu** | Title, **Play** button (also `Enter`/`Space`), current high score, controls cheat-sheet, mute toggle *(the mute toggle arrives with audio in Phase 7; ADR-0008)* |
-| **HUD** (while playing) | Score (top-left), high score (top-right; tracks the live score once you beat it), pause button |
-| **Pause** | Dimmed overlay, **Resume** (also `Esc`/`P`/`Enter`), **Restart**, **Main Menu**. The game also auto-pauses when the tab or window loses focus, but only mid-run. |
+| **Main menu** | Title, **Play** button (also `Enter`/`Space`), current high score, controls cheat-sheet, **Sound on/off** toggle (also `M`) |
+| **HUD** (while playing) | Score (top-left), high score (top-right; tracks the live score once you beat it), sound and pause buttons |
+| **Pause** | Dimmed overlay, **Resume** (also `Esc`/`P`/`Enter`), **Restart**, **Main Menu**, **Sound on/off**. The game also auto-pauses when the tab or window loses focus, but only mid-run. |
 | **Game over** | "CAUGHT" heading, final score, high score, a "NEW HIGH SCORE!" badge when earned, **Play Again** (also `Enter`/`Space`, after a 0.6 s delay so a mashed jump can't skip the screen), **Main Menu** |
 
 While paused, the game loop keeps rendering but stops simulating. The paused frame is frozen exactly, and leftover step time is dropped on resume, so nothing jumps. The key that starts or restarts a run never also counts as a jump. Every Play / Play Again / Restart / Main Menu runs one full `resetRun()` (ADR-0008).
@@ -219,11 +224,9 @@ While paused, the game loop keeps rendering but stops simulating. The paused fra
 
 **Later, if wanted:** swap characters or props for small `.glb` files in `assets/models/` (each under ~300 KB, low-poly). This requires vendoring `GLTFLoader.js` into `libs/`. Any `.glb` must be self-made or properly licensed (e.g. CC0), with credit recorded in a `CREDITS.md`.
 
-**Sound:** short SFX (jump, slide, stumble, caught, button click) and one looping music track. Either:
-- generate them with the Web Audio API in code (zero files), or
-- use small CC0 `.ogg` files in `assets/sounds/`.
+**Sound:** short SFX (jump, landing, slide, stumble, caught, near miss, button click, spark crackle) and one generative music loop, all **generated with the Web Audio API in code: zero audio files** (ADR-0015, resolving §10 Q3).
 
-Audio starts only after the first user click (browser autoplay rules). The mute setting is saved in `localStorage`.
+Audio starts only after the first user click or key press (browser autoplay rules). The mute setting is saved in `localStorage` under `neonWasteland.settings` as JSON.
 
 ---
 
@@ -327,6 +330,11 @@ Each phase is roughly one prompt or session. Every phase ends with something you
 ### Phase 7: Audio & juice
 - SFX and music (Web Audio or small files), mute toggle saved to storage.
 - Camera shake on stumble, landing squash, sparks, screen-flicker on near-miss.
+- **Acceptance:** *(verified 2026-11-18 in headless Chrome on the Apple M3 Pro GPU; see the Phase 7 handoff)*
+  - [x] SFX for jump, landing, slide, stumble, caught, near miss, clicks, sparks, plus a music loop that follows speed; silent until the first input
+  - [x] Mute via `M` and buttons on the menu, pause, and HUD; saved and restored across reloads
+  - [x] Camera shake (stumble, catch, hard landing, near miss), landing squash, sparks (stumble, catch, live HIGH cables), near-miss screen flicker; all freeze on pause and reset with the run
+  - [x] Still 60 fps at max speed (≈60.5 fps, 91 draw calls)
 
 ### Phase 8: Polish & extras (pick and choose)
 - Touch/swipe controls for tablets.
@@ -339,5 +347,5 @@ Each phase is roughly one prompt or session. Every phase ends with something you
 ## 10. Open Questions (decide as we go)
 1. **Game title:** ~~"Neon Wasteland" is a working name.~~ **Resolved: "Apocalypse Run"** (ADR-0010). The `localStorage` keys keep the old `neonWasteland.` prefix so saved high scores aren't lost.
 2. **Split `game.js` into modules** once it gets big, or keep a single file? *(Partly answered: logic is modular from the start, per ADR-0001. View code still to be decided.)*
-3. **Audio:** generated in code (zero files) vs. CC0 sound files?
+3. **Audio:** ~~generated in code (zero files) vs. CC0 sound files?~~ **Resolved: generated in code with Web Audio** (ADR-0015).
 4. **Collectibles:** include data shards in v1, or keep pure distance scoring?
