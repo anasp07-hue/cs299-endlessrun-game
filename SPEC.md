@@ -54,6 +54,8 @@ endless-runner/
 │   │   └── hud.js      # Allocation-free digit writer for the HUD
 │   ├── characters.js   # View: Hacker and Agent THREE.Group rigs, applyPose (ADR-0012)
 │   ├── city.js         # View: sky dome + fog, ruined buildings, screens, cables, wrecks, dust, road texture (ADR-0013)
+│   ├── obstacleModels.js # View (DOM-free): themed LOW/HIGH/BLOCK models fitted to their hitboxes (ADR-0014)
+│   ├── geometry.js     # View (DOM-free): shared builders (coloured merges, hover-car, barrier, tubes)
 │   └── palette.js      # Color palette (mirrored as CSS vars in style.css)
 ├── tests/              # node --test 'tests/*.test.js'  (Node built-in runner, dev-only — see ADR-0002, ADR-0004)
 ├── docs/
@@ -130,6 +132,7 @@ Spawn rules:
   - A LOW followed by a LOW or HIGH in the same lane is never closer than a full jump.
 - **No idle lanes:** a lane can be empty for at most one row at a time. Any lane that was empty in a row gets an obstacle (LOW, HIGH, or BLOCK) in the next row, so you never sit in a lane with nothing to do for two rows (ADR-0007).
 - Patterns are written as 3-letter strings, one letter per lane: `L` LOW, `H` HIGH, `B` BLOCK, `.` empty (e.g. `B.B`, `LBH`). Each has a minimum difficulty and a weight.
+- Looks (Phase 6, ADR-0014), two variants per type, each with a single cue colour: **LOW**, a fallen screen on rubble or a barrier laid across the lane, with amber/black hazard stripes. **HIGH**, a hanging billboard frame or a broken beam with sparking cables, with a glowing white line exactly at the slide height and nothing below it. **BLOCK**, a hover-car crashed tail-first or a broken pillar, with bold red lights and bands. Set dressing never uses the cue colours.
 - Obstacle sizes (hitbox = visual): all 2.0 wide (lanes are 2.5, so a neighbouring lane never clips). LOW: 0.9 tall. HIGH: from 1.1 up to 2.5, above the 2.2 jump apex, so it can only be slid under. BLOCK: 2.6 tall.
 
 ### 3.5 Speed & difficulty
@@ -318,7 +321,8 @@ Each phase is roughly one prompt or session. Every phase ends with something you
 ### Phase 6: Themed obstacles
 - Replace placeholder obstacles: low → fallen screens/barriers; high → hanging sparking wires/beams; block → wrecked hover-cars/pillars.
 - Make sure each type is visually distinct at speed (silhouette and color cue).
-- **Acceptance:** A new player can tell at a glance which action each obstacle needs.
+- **Acceptance:** *(verified 2026-11-18 in headless Chrome on the Apple M3 Pro GPU; see the Phase 6 handoff)*
+  - [x] A new player can tell at a glance which action each obstacle needs: LOW = low and wide with amber/black stripes; HIGH = hanging frame or beam with a glowing white line at slide height and empty space beneath; BLOCK = tall and solid with red lights/bands. Checked at start and max speed; the final judgement with a real new player is the user's.
 
 ### Phase 7: Audio & juice
 - SFX and music (Web Audio or small files), mute toggle saved to storage.

@@ -1,4 +1,7 @@
 // Apocalypse Run — browser entry point.
+// Phase 6: themed obstacles (js/obstacleModels.js, ADR-0014): fallen screens /
+// striped barriers (LOW), hanging billboards / cable beams (HIGH), crashed
+// hover-cars / broken pillars (BLOCK), each fitted to its hitbox.
 // Phase 5: the dead city around the road (js/city.js, layout in
 // js/logic/scenery.js, ADR-0013): sky gradient + matching fog, ruined
 // buildings, broken screens, cables, wrecks, rubble, dust.
@@ -21,7 +24,7 @@ import { segmentZ, laneX } from './js/logic/world.js';
 import { actionForKeyEvent } from './js/logic/input.js';
 import { queueLaneMove, requestJump, requestSlide, jumpVelocity } from './js/logic/player.js';
 import { difficultyAt } from './js/logic/difficulty.js';
-import { OB, obstacleBottom, obstacleTop, obstacleDepth } from './js/logic/collision.js';
+import { OB } from './js/logic/collision.js';
 import { resetSpawner } from './js/logic/spawner.js';
 import { createRun, resetRun, stepRun, freezeInterpolation, acceptsInput } from './js/logic/run.js';
 import { chaserDelaySteps, catchProgress, agentInView } from './js/logic/chaser.js';
@@ -31,7 +34,8 @@ import {
   agentRun, agentAir, agentSlide, agentReach, hitWeight, hitOverlay,
 } from './js/logic/pose.js';
 import { createHacker, createAgent, applyPose } from './js/characters.js';
-import { createCity, makeRoadTexture } from './js/city.js';
+import { createCity, makeRoadTexture, applySkyFog } from './js/city.js';
+import { buildObstacleModels, obstacleVariant, OBSTACLE_VARIANTS } from './js/obstacleModels.js';
 import {
   STATE, CMD, nextState, startsNewRun, commandFor, shouldAutoPause, canRestart, abandonsRun,
 } from './js/logic/state.js';
@@ -105,29 +109,33 @@ const agent = createAgent();
 agent.root.visible = false;
 scene.add(agent.root);
 
-// --- Obstacles: one InstancedMesh per type (3 draw calls total), pooled ------
-// Placeholder color cues from the art-direction skill: LOW = hazard amber,
-// HIGH = spark white glow, BLOCK = danger red. Themed models come in Phase 6.
-function makeObstacleMesh(type, color, glow) {
-  const geo = new THREE.BoxGeometry(
-    CONFIG.OBSTACLE_WIDTH,
-    obstacleTop(type, CONFIG) - obstacleBottom(type, CONFIG),
-    obstacleDepth(type, CONFIG),
-  );
-  const mat = new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: glow });
-  const mesh = new THREE.InstancedMesh(geo, mat, CONFIG.MAX_OBSTACLES);
-  mesh.count = 0;
-  mesh.frustumCulled = false; // instances move every frame; the cached bounds would be stale
-  scene.add(mesh);
-  return mesh;
-}
-const obstacleMeshes = [];
-obstacleMeshes[OB.LOW] = makeObstacleMesh(OB.LOW, PALETTE.hazardAmber, 0.35);
-obstacleMeshes[OB.HIGH] = makeObstacleMesh(OB.HIGH, PALETTE.sparkWhite, 0.6);
-obstacleMeshes[OB.BLOCK] = makeObstacleMesh(OB.BLOCK, PALETTE.dangerRed, 0.35);
-const obstacleCenterY = [];
+// --- Obstacles: themed models (js/obstacleModels.js, ADR-0014), pooled -------
+// Each type has OBSTACLE_VARIANTS looks; each look is a lit body plus an unlit
+// glowing cue (LOW amber stripes, HIGH a white line at slide height, BLOCK red
+// lights). One InstancedMesh per (type, variant, part): 12 draw calls, two
+// shared materials. The models sit at (laneX, 0, z): they are built in place.
+// Same sky-matched fog as the city, so tall obstacle parts fade into the sky alike (ADR-0013).
+const obstacleBodyMat = applySkyFog(new THREE.MeshLambertMaterial({ vertexColors: true }), CONFIG, 'obstacle-body');
+const obstacleGlowMat = applySkyFog(new THREE.MeshBasicMaterial({ vertexColors: true }), CONFIG, 'obstacle-glow');
+const obstacleModels = buildObstacleModels(CONFIG);
+const obstacleSets = []; // [type][variant] = { body, glow } InstancedMeshes
+const obstacleMeshes = []; // the same meshes, flat, for per-frame resets
 for (const t of [OB.LOW, OB.HIGH, OB.BLOCK]) {
-  obstacleCenterY[t] = (obstacleBottom(t, CONFIG) + obstacleTop(t, CONFIG)) / 2;
+  obstacleSets[t] = [];
+  for (let v = 0; v < OBSTACLE_VARIANTS; v++) {
+    const pair = {};
+    for (const part of ['body', 'glow']) {
+      const mesh = new THREE.InstancedMesh(
+        obstacleModels[t][v][part], part === 'body' ? obstacleBodyMat : obstacleGlowMat, CONFIG.MAX_OBSTACLES,
+      );
+      mesh.count = 0;
+      mesh.frustumCulled = false; // instances move every frame; the cached bounds would be stale
+      scene.add(mesh);
+      obstacleMeshes.push(mesh);
+      pair[part] = mesh;
+    }
+    obstacleSets[t].push(pair);
+  }
 }
 const scratchMatrix = new THREE.Matrix4();
 
@@ -469,24 +477,24 @@ function render(alpha, dt) {
   runnerLight.position.x = px;
 
   // Obstacles: z from the same interpolated scroll as the road (no drift).
-  obstacleMeshes[OB.LOW].count = 0;
-  obstacleMeshes[OB.HIGH].count = 0;
-  obstacleMeshes[OB.BLOCK].count = 0;
+  for (let i = 0; i < obstacleMeshes.length; i++) obstacleMeshes[i].count = 0;
   const slots = run.spawner.slots;
   for (let i = 0; i < slots.length; i++) {
     const o = slots[i];
     if (!o.active) continue;
-    const mesh = obstacleMeshes[o.type];
-    scratchMatrix.makeTranslation(
-      laneX(o.lane, CONFIG.LANE_WIDTH, CONFIG.LANE_COUNT),
-      obstacleCenterY[o.type],
-      s - o.s,
-    );
-    mesh.setMatrixAt(mesh.count++, scratchMatrix);
+    const set = obstacleSets[o.type][obstacleVariant(o.row, o.lane)];
+    scratchMatrix.makeTranslation(laneX(o.lane, CONFIG.LANE_WIDTH, CONFIG.LANE_COUNT), 0, s - o.s);
+    set.body.setMatrixAt(set.body.count++, scratchMatrix);
+    set.glow.setMatrixAt(set.glow.count++, scratchMatrix);
   }
-  obstacleMeshes[OB.LOW].instanceMatrix.needsUpdate = true;
-  obstacleMeshes[OB.HIGH].instanceMatrix.needsUpdate = true;
-  obstacleMeshes[OB.BLOCK].instanceMatrix.needsUpdate = true;
+  // Upload only the live instances (a mesh with none left needs no upload: count 0 draws nothing).
+  for (let i = 0; i < obstacleMeshes.length; i++) {
+    const m = obstacleMeshes[i];
+    if (m.count === 0) continue;
+    m.instanceMatrix.clearUpdateRanges();
+    m.instanceMatrix.addUpdateRange(0, m.count * 16);
+    m.instanceMatrix.needsUpdate = true;
+  }
 
   // Camera: behind and above, partly following the player's lane.
   cameraX = damp(cameraX, px * CONFIG.CAMERA_FOLLOW_X, CONFIG.CAMERA_FOLLOW_RATE, dt);

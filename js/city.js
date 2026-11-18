@@ -11,6 +11,7 @@
 
 import * as THREE from '../libs/three.module.js';
 import { PALETTE } from './palette.js';
+import { mergeColored, makeCarGeometry, makeBarrierGeometry, tube } from './geometry.js';
 import { createRng } from './logic/rng.js';
 import { laneX } from './logic/world.js';
 import { mod } from './logic/math.js';
@@ -63,6 +64,14 @@ function fadeFogged(material, key) {
   };
   material.customProgramCacheKey = () => `fadefog-${key}`;
   return material;
+}
+
+/**
+ * Give a material from outside the city (e.g. the obstacles) the same
+ * sky-matched fog as the city, so everything fades into the sky alike.
+ */
+export function applySkyFog(material, cfg, key) {
+  return skyFogged(material, skyGlsl(PALETTE, cfg), key);
 }
 
 function skyFogged(material, sky, key) {
@@ -353,86 +362,15 @@ function drawGlitchScreen(ctx, w, h, rng, font) {
 
 // --- Geometry helpers ----------------------------------------------------------------------
 
-/** Merge non-indexed copies of several geometries, each painted one vertex colour. */
-function mergeColored(parts) {
-  const pos = [];
-  const nor = [];
-  const col = [];
-  for (const [geo, color] of parts) {
-    const g = geo.index ? geo.toNonIndexed() : geo;
-    const p = g.attributes.position.array;
-    const n = g.attributes.normal.array;
-    const c = new THREE.Color(color);
-    for (let i = 0; i < p.length; i += 3) {
-      pos.push(p[i], p[i + 1], p[i + 2]);
-      nor.push(n[i], n[i + 1], n[i + 2]);
-      col.push(c.r, c.g, c.b);
-    }
-  }
-  const out = new THREE.BufferGeometry();
-  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-  out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  return out;
-}
-
-/** A wrecked hover-car facing −Z: wedge body, cockpit bubble, flat thruster pods (no wheels). Base at y = 0. */
-function makeCarGeometry(cfg) {
-  const W = cfg.CAR_WIDTH;
-  const Lc = cfg.CAR_LENGTH;
-  const body = new THREE.BoxGeometry(W, 0.6, Lc, 1, 1, 1);
-  // Wedge: drop the top front edge.
-  const p = body.attributes.position;
-  for (let i = 0; i < p.count; i++) if (p.getY(i) > 0 && p.getZ(i) < 0) p.setY(i, p.getY(i) - 0.35);
-  body.computeVertexNormals();
-  body.translate(0, 0.62, 0);
-  const cockpit = new THREE.SphereGeometry(0.62, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2);
-  cockpit.scale(1, 0.75, 1.5);
-  cockpit.translate(0, 0.88, 0.25);
-  const parts = [[body, PALETTE.rust], [cockpit, '#0c1218']];
-  for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) {
-      const pod = new THREE.BoxGeometry(0.62, 0.2, 1.0);
-      pod.translate(sx * (W / 2 - 0.3), 0.12, sz * (Lc / 2 - 0.65));
-      parts.push([pod, '#2a2d31']);
-    }
-  }
-  const tail = new THREE.BoxGeometry(W * 0.7, 0.35, 0.25);
-  tail.translate(0, 0.72, Lc / 2 + 0.1);
-  parts.push([tail, '#202326']);
-  return mergeColored(parts);
-}
-
-/** A concrete road barrier (the sloped "jersey" profile), long axis along z, base at y = 0. */
-function makeBarrierGeometry(cfg) {
-  const w = cfg.BARRIER_WIDTH / 2;
-  const h = cfg.BARRIER_HEIGHT;
-  const shape = new THREE.Shape();
-  shape.moveTo(-w, 0);
-  shape.lineTo(w, 0);
-  shape.lineTo(w, h * 0.15);
-  shape.lineTo(w * 0.45, h * 0.38);
-  shape.lineTo(w * 0.38, h);
-  shape.lineTo(-w * 0.38, h);
-  shape.lineTo(-w * 0.45, h * 0.38);
-  shape.lineTo(-w, h * 0.15);
-  shape.closePath();
-  const g = new THREE.ExtrudeGeometry(shape, { depth: cfg.BARRIER_LENGTH, bevelEnabled: false });
-  g.translate(0, 0, -cfg.BARRIER_LENGTH / 2);
-  g.computeVertexNormals();
-  return mergeColored([[g, '#4b535b']]);
-}
-
 /** A cable from x = −span to +span sagging `sag` at the middle, with a little sideways wander. */
 function makeWireGeometry(span, sag, wander, cfg) {
   const pts = [];
   for (let i = 0; i <= 8; i++) {
     const t = i / 8;
-    const x = -span + 2 * span * t;
     const u = 2 * t - 1;
-    pts.push(new THREE.Vector3(x, -sag * (1 - u * u), Math.sin(t * Math.PI) * wander));
+    pts.push([-span + 2 * span * t, -sag * (1 - u * u), Math.sin(t * Math.PI) * wander]);
   }
-  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 28, cfg.WIRE_RADIUS, 4, false);
+  return tube(pts, cfg.WIRE_RADIUS, 28, 4);
 }
 
 // --- The city ----------------------------------------------------------------------------
@@ -504,8 +442,8 @@ export function createCity(scene, renderer, cfg) {
   const unitBoxBase = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0); // buildings: base at y = 0
   const unitBox = new THREE.BoxGeometry(1, 1, 1);
   const screenGeo = new THREE.PlaneGeometry(1, 1);
-  const carGeo = makeCarGeometry(cfg);
-  const barrierGeo = makeBarrierGeometry(cfg);
+  const carGeo = makeCarGeometry(cfg.CAR_WIDTH, cfg.CAR_LENGTH);
+  const barrierGeo = makeBarrierGeometry(cfg.BARRIER_WIDTH, cfg.BARRIER_HEIGHT, cfg.BARRIER_LENGTH, '#4b535b');
   const stripGeo = new THREE.BoxGeometry(cfg.CAR_WIDTH + 0.04, 0.06, cfg.CAR_LENGTH * 0.7).translate(0, 0.58, 0.1);
   const postGeo = makeLampPostGeometry(cfg);
   const lensGeo = new THREE.BoxGeometry(0.62, 0.03, 0.26).translate(-cfg.STREETLIGHT_ARM, cfg.STREETLIGHT_HEIGHT - 0.215, 0);
