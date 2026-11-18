@@ -22,22 +22,23 @@ test('parseSettings: defaults for missing/garbage/wrong types; takes a valid mut
   for (const raw of [null, undefined, '', 'abc', '[]', 'null', '42', '{"muted":"yes"}', '{"muted":1}', '{']) {
     assert.deepEqual(parseSettings(raw), { ...DEFAULT_SETTINGS }, String(raw));
   }
-  assert.deepEqual(parseSettings('{"muted":true}'), { muted: true });
-  assert.deepEqual(parseSettings('{"muted":false,"junk":9}'), { muted: false });
+  // Phase 8 added `quality`: a Phase 7 save (mute only) still loads, with the default quality.
+  assert.deepEqual(parseSettings('{"muted":true}'), { muted: true, quality: 'high' });
+  assert.deepEqual(parseSettings('{"muted":false,"junk":9}'), { muted: false, quality: 'high' });
 });
 
 test('load/save settings through an injected storage; missing or throwing storage is harmless', () => {
   const mem = new Map();
   const storage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, v) };
-  assert.deepEqual(loadSettings(storage), { muted: false });
-  assert.equal(saveSettings(storage, { muted: true }), true);
-  assert.equal(mem.get(SETTINGS_KEY), '{"muted":true}');
-  assert.deepEqual(loadSettings(storage), { muted: true });
+  assert.deepEqual(loadSettings(storage), { muted: false, quality: 'high' });
+  assert.equal(saveSettings(storage, { muted: true, quality: 'high' }), true);
+  assert.equal(mem.get(SETTINGS_KEY), '{"muted":true,"quality":"high"}');
+  assert.deepEqual(loadSettings(storage), { muted: true, quality: 'high' });
   assert.equal(SETTINGS_KEY, 'neonWasteland.settings');
   const broken = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('quota'); } };
-  assert.deepEqual(loadSettings(broken), { muted: false });
+  assert.deepEqual(loadSettings(broken), { muted: false, quality: 'high' });
   assert.equal(saveSettings(broken, { muted: true }), false);
-  assert.deepEqual(loadSettings(null), { muted: false });
+  assert.deepEqual(loadSettings(null), { muted: false, quality: 'high' });
   assert.equal(saveSettings(null, { muted: true }), false);
   // A fresh object each time: callers can't mutate the defaults.
   const a = loadSettings(null);

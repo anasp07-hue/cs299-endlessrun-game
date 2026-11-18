@@ -21,6 +21,10 @@
         <span class="hud-label">SCORE</span>
         <span id="hud-score" class="hud-value"></span>
       </div>
+      <div class="hud-stat hud-shards" title="Data shards collected">
+        <span class="hud-label">SHARDS</span>
+        <span class="hud-shard-row"><span class="shard-icon" aria-hidden="true"></span><span id="hud-shards" class="hud-value"></span></span>
+      </div>
       <div class="hud-stat hud-right">
         <span class="hud-label">BEST</span>
         <span id="hud-best" class="hud-value"></span>
@@ -46,8 +50,12 @@
           <dt>↓ / S</dt><dd>slide (fast-fall in the air)</dd>
           <dt>Esc / P</dt><dd>pause</dd>
           <dt>M</dt><dd>sound on / off</dd>
+          <dt><span class="shard-icon" aria-hidden="true"></span> shards</dt><dd>grab them for bonus points</dd>
         </dl>
-        <button id="btn-mute-menu" class="btn btn-small js-mute" type="button" aria-pressed="false">SOUND: ON</button>
+        <div class="settings-row">
+          <button id="btn-mute-menu" class="btn btn-small js-mute" type="button" aria-pressed="false">SOUND: ON</button>
+          <button id="btn-quality-menu" class="btn btn-small js-quality" type="button" title="LOW: lower resolution, no dust or sparks">QUALITY: HIGH</button>
+        </div>
         <p class="hint">Press <kbd>Enter</kbd> or <kbd>Space</kbd> to play</p>
       </div>
     </div>
@@ -59,7 +67,10 @@
         <button id="btn-resume" class="btn btn-primary" type="button">RESUME</button>
         <button id="btn-restart" class="btn" type="button">RESTART</button>
         <button id="btn-pause-menu" class="btn" type="button">MAIN MENU</button>
-        <button id="btn-mute-pause" class="btn btn-small js-mute" type="button" aria-pressed="false">SOUND: ON</button>
+        <div class="settings-row">
+          <button id="btn-mute-pause" class="btn btn-small js-mute" type="button" aria-pressed="false">SOUND: ON</button>
+          <button id="btn-quality-pause" class="btn btn-small js-quality" type="button" title="LOW: lower resolution, no dust or sparks">QUALITY: HIGH</button>
+        </div>
         <p class="hint"><kbd>Esc</kbd> / <kbd>P</kbd> to resume</p>
       </div>
     </div>
@@ -70,6 +81,7 @@
         <h2 class="heading heading-danger">CAUGHT</h2>
         <p id="new-high" class="badge" hidden>NEW HIGH SCORE!</p>
         <p class="stat-line">SCORE <span id="final-score" class="stat-value stat-big">0</span></p>
+        <p class="stat-line">SHARDS <span id="final-shards" class="stat-value">0</span></p>
         <p class="stat-line">HIGH SCORE <span id="final-best" class="stat-value">0</span></p>
         <button id="btn-again" class="btn btn-primary" type="button">PLAY AGAIN</button>
         <button id="btn-over-menu" class="btn" type="button">MAIN MENU</button>

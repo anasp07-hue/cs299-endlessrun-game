@@ -13,7 +13,8 @@ import { createSpawner, resetSpawner, updateSpawner, findHit } from './spawner.j
 import { createBox, setPlayerBox } from './collision.js';
 import { trackNearMisses } from './spawner.js';
 import { createTrail, resetTrail, pushTrail } from './trail.js';
-import { speedAt, addScore } from './difficulty.js';
+import { speedAt, addScore, shardScore } from './difficulty.js';
+import { createShards, resetShards, updateShards, collectShards } from './shards.js';
 
 export function createRun(cfg, seed = 0) {
   const run = {
@@ -30,6 +31,8 @@ export function createRun(cfg, seed = 0) {
     nearMisses: 0, // near-miss count (Phase 7 effects compare it with what they last saw)
     nearMissType: 0, // obstacle type of the latest near miss
     nearMissLane: 0,
+    shardCount: 0, // data shards collected this run (Phase 8)
+    shards: createShards(cfg, seed),
     player: createPlayer(cfg),
     chaser: createChaser(cfg),
     trail: createTrail(cfg.TRAIL_STEPS), // the player's recent path, which the Agent follows
@@ -56,10 +59,14 @@ export function resetRun(run, cfg, seed) {
   run.nearMisses = 0;
   run.nearMissType = 0;
   run.nearMissLane = 0;
+  run.shardCount = 0;
+  resetShards(run.shards, cfg, seed);
   resetPlayer(run.player, cfg);
   resetChaser(run.chaser, cfg);
   resetTrail(run.trail, run.player.x);
   resetSpawner(run.spawner, cfg, seed, 0);
+  // Place the run-up line now, so it is there on the first frame (never pops in mid-view).
+  updateShards(run.shards, run.spawner, 0, cfg);
   const b = run.playerBox;
   b.minX = b.maxX = b.minY = b.maxY = b.minZ = b.maxZ = 0;
   const s = run.scratchBox;
@@ -113,13 +120,17 @@ export function stepRun(run, h, cfg, god = false) {
     run.clipSlot = -1;
   }
   updateSpawner(run.spawner, run.scroll, run.speed, run.elapsed, cfg);
+  updateShards(run.shards, run.spawner, run.scroll, cfg);
   stepChaser(c, h, cfg);
 
   const p = run.player;
   const sp = run.spawner;
   setPlayerBox(run.playerBox, p, cfg);
   const first = findHit(sp, run.playerBox, run.scroll, cfg, run.scratchBox);
-  if (god) return first;
+  if (god) {
+    collect(run, cfg);
+    return first;
+  }
 
   // The player box can overlap two obstacles at once mid-move (one in each
   // lane), so after a side clip look again: a head-on hit still counts.
@@ -142,6 +153,8 @@ export function stepRun(run, h, cfg, god = false) {
     hit = findHit(sp, run.playerBox, run.scroll, cfg, run.scratchBox);
   }
   if (!c.catching) {
+    // After the hit check: a shard touched on the step you get caught doesn't count.
+    collect(run, cfg);
     const near = trackNearMisses(sp, run.playerBox, run.scroll, cfg.NEAR_MISS_MARGIN, cfg, run.scratchBox);
     if (near >= 0) {
       run.nearMisses++;
@@ -150,6 +163,14 @@ export function stepRun(run, h, cfg, god = false) {
     }
   }
   return first;
+}
+
+function collect(run, cfg) {
+  const got = collectShards(run.shards, run.playerBox, run.scroll, cfg, run.scratchBox);
+  if (got > 0) {
+    run.shardCount += got;
+    run.score += shardScore(got, run.scroll, cfg);
+  }
 }
 
 /**

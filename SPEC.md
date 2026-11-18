@@ -51,7 +51,8 @@ endless-runner/
 │   │   ├── run.js      # One run's state, its full reset, and the fixed step (ADR-0008)
 │   │   ├── state.js    # MENU/PLAYING/PAUSED/GAMEOVER transitions, key → command per state
 │   │   ├── highscore.js # High-score parsing and load/save through an injected storage
-│   │   ├── settings.js # Settings (mute) parsing and load/save under neonWasteland.settings (ADR-0015)
+│   │   ├── settings.js # Settings (mute, quality) parsing and load/save under neonWasteland.settings (ADR-0015, ADR-0016)
+│   │   ├── shards.js   # Data-shard placement between rows, pickup, pool (ADR-0016)
 │   │   ├── juice.js    # Camera-shake trauma, landing squash, near-miss flash (ADR-0015)
 │   │   ├── particles.js # Pooled spark particles (ADR-0015)
 │   │   └── hud.js      # Allocation-free digit writer for the HUD
@@ -159,7 +160,7 @@ Exact rules (ADR-0011):
 
 ### 3.7 Scoring
 - Score = distance traveled, multiplied by a slowly rising multiplier.
-- *(Optional, Phase 8)* Collectible "data shards" floating in lanes give bonus points.
+- **Data shards** (Phase 8, ADR-0016): glowing blue diamonds in short lines (3–5, 2.2 apart) in the open stretch between two obstacle rows. About half the gaps get a line, in a lane that isn't BLOCKed in the next row (preferably one open in both rows). Each shard is worth **25 × the current multiplier**. They sit at waist height (y 0.45–1.25): running or sliding through collects them, jumping over misses them. They are always optional: they never overlap an obstacle (each is kept a full row margin clear) and use their own seeded RNG, so the obstacle sequence and its fairness are unchanged. The HUD and the game-over screen show the shard count.
 
 ---
 
@@ -177,16 +178,20 @@ All UI is HTML/CSS layered on top of the canvas (not drawn in three.js). It uses
 
 | Screen | Contents |
 |---|---|
-| **Main menu** | Title, **Play** button (also `Enter`/`Space`), current high score, controls cheat-sheet, **Sound on/off** toggle (also `M`) |
-| **HUD** (while playing) | Score (top-left), high score (top-right; tracks the live score once you beat it), sound and pause buttons |
-| **Pause** | Dimmed overlay, **Resume** (also `Esc`/`P`/`Enter`), **Restart**, **Main Menu**, **Sound on/off**. The game also auto-pauses when the tab or window loses focus, but only mid-run. |
-| **Game over** | "CAUGHT" heading, final score, high score, a "NEW HIGH SCORE!" badge when earned, **Play Again** (also `Enter`/`Space`, after a 0.6 s delay so a mashed jump can't skip the screen), **Main Menu** |
+| **Main menu** | Title, **Play** button (also `Enter`/`Space`), current high score, controls cheat-sheet, **Sound on/off** toggle (also `M`), **Quality high/low** toggle |
+| **HUD** (while playing) | Score (top-left) with the shard count under it, high score (top-right; tracks the live score once you beat it), sound and pause buttons |
+| **Pause** | Dimmed overlay, **Resume** (also `Esc`/`P`/`Enter`), **Restart**, **Main Menu**, **Sound on/off**, **Quality high/low**. The game also auto-pauses when the tab or window loses focus, but only mid-run. |
+| **Game over** | "CAUGHT" heading, final score, shards collected, high score, a "NEW HIGH SCORE!" badge when earned, **Play Again** (also `Enter`/`Space`, after a 0.6 s delay so a mashed jump can't skip the screen), **Main Menu** |
 
 While paused, the game loop keeps rendering but stops simulating. The paused frame is frozen exactly, and leftover step time is dropped on resume, so nothing jumps. The key that starts or restarts a run never also counts as a jump. Every Play / Play Again / Restart / Main Menu runs one full `resetRun()` (ADR-0008).
 
 ### High score persistence
 - Stored in `localStorage` under the key `neonWasteland.highScore`, as a whole number. Saved only when strictly beaten. Missing or garbage values read as 0.
 - Every `localStorage` read/write is wrapped in `try/catch`. If storage is unavailable (private mode), the game still works and just doesn't keep the score.
+
+### Settings
+- Saved as JSON under `neonWasteland.settings`: `{ "muted": bool, "quality": "high" | "low" }`. Unknown or invalid values fall back to the defaults (sound on, quality high), and a Phase 7 save without `quality` still loads.
+- **Quality** (Phase 8, ADR-0016): HIGH renders at up to 1.5 pixels per CSS pixel with dust and sparks. LOW renders at 1 pixel per CSS pixel with no dust or sparks. The game has no shadows (§5), so resolution stands in for the "shadows" part of the original Phase 8 idea. Gameplay and sound are the same at both levels.
 
 ---
 
@@ -337,10 +342,15 @@ Each phase is roughly one prompt or session. Every phase ends with something you
   - [x] Still 60 fps at max speed (≈60.5 fps, 91 draw calls)
 
 ### Phase 8: Polish & extras (pick and choose)
-- Touch/swipe controls for tablets.
+Scope chosen by the user (2026-11-18): **data shards and the quality setting only** (ADR-0016).
+- ~~Touch/swipe controls for tablets.~~ Not in v1 (dropped by the user).
 - Data-shard collectibles.
-- Settings (quality low/high, which toggles particles/shadows).
-- Performance profiling pass and final browser testing against §8.
+- Settings (quality low/high, which toggles particles and resolution; the game has no shadows).
+- ~~Performance profiling pass and final browser testing against §8.~~ Not done as a separate pass (dropped by the user). The usual per-phase smoke and fps check still ran.
+- **Acceptance:** *(verified 2026-11-18 in headless Chrome on the Apple M3 Pro GPU; see the Phase 8 handoff)*
+  - [x] Shards appear in lines between rows, never on an obstacle, and never change the obstacle sequence; running or sliding through collects them, jumping over misses them; each is worth 25 × the multiplier; the HUD and game-over screen show the count, and it resets with the run
+  - [x] Quality LOW/HIGH from the menu and pause screens: LOW drops resolution to 1 pixel per CSS pixel and turns off dust and sparks; saved and restored across reloads
+  - [x] Still 60 fps at max speed at both quality levels (60.1 HIGH / 60.0 LOW, about 102 draw calls)
 
 ---
 
@@ -348,4 +358,4 @@ Each phase is roughly one prompt or session. Every phase ends with something you
 1. **Game title:** ~~"Neon Wasteland" is a working name.~~ **Resolved: "Apocalypse Run"** (ADR-0010). The `localStorage` keys keep the old `neonWasteland.` prefix so saved high scores aren't lost.
 2. **Split `game.js` into modules** once it gets big, or keep a single file? *(Partly answered: logic is modular from the start, per ADR-0001. View code still to be decided.)*
 3. **Audio:** ~~generated in code (zero files) vs. CC0 sound files?~~ **Resolved: generated in code with Web Audio** (ADR-0015).
-4. **Collectibles:** include data shards in v1, or keep pure distance scoring?
+4. **Collectibles:** ~~include data shards in v1, or keep pure distance scoring?~~ **Resolved: data shards are in v1**, as optional bonus points that never touch obstacle fairness (ADR-0016).

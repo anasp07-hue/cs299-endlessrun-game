@@ -100,6 +100,32 @@ body {
   align-items: flex-end;
 }
 
+.hud-shards {
+  left: 18px;
+  top: 70px;
+}
+
+.hud-shard-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.hud-shards .hud-value {
+  font-size: 18px;
+}
+
+/* Data shard: a small glowing diamond (same glowBlue as the 3D shards). */
+.shard-icon {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--glow-blue);
+  box-shadow: 0 0 6px rgba(127, 182, 230, 0.6);
+  transform: rotate(45deg);
+  vertical-align: middle;
+}
+
 .hud-label {
   font-size: 11px;
   letter-spacing: 0.25em;
@@ -314,6 +340,17 @@ body {
   font-size: 12px;
   padding: 7px 12px;
   color: var(--text-dim);
+}
+
+.settings-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.settings-row .btn {
+  flex: 1;
 }
 
 .js-mute.btn[aria-pressed='true'] {

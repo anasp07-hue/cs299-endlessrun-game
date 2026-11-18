@@ -18,6 +18,9 @@ const LANES = 3;
 // Numeric tolerances (not gameplay tuning):
 const SPEED_EPS = 0.01; // arrival-speed estimate counts as settled within this (units/s)
 const MAX_REROLLS = 32; // random-row attempts before the always-valid fallback
+// Gap log for the shard placer (Phase 8): ring of the most recent row-to-row
+// gaps. More than this many rows are never planned in one step.
+export const GAP_LOG = 16;
 
 // --- Pattern table -------------------------------------------------------------
 // Lanes left→right: L = LOW (jump), H = HIGH (slide), B = BLOCK (dodge), . = empty.
@@ -237,6 +240,15 @@ export function createSpawner(cfg, seed = 0) {
     randomRows: 0, // how many of them were generated lane-by-lane
     dropped: 0, // rows skipped because the pool was full (should stay 0)
     active: 0, // obstacles currently live
+    // Gap log (ADR-0016): the open stretch between consecutive rows, for the
+    // shard placer. Entry k (k % GAP_LOG) runs from track position gapFrom to
+    // gapTo; gapPrevOpen / gapNextOpen are bitmasks of the non-BLOCK lanes of
+    // the rows on either side. `gaps` counts every entry ever logged.
+    gapFrom: new Array(GAP_LOG).fill(0),
+    gapTo: new Array(GAP_LOG).fill(0),
+    gapPrevOpen: new Array(GAP_LOG).fill(0),
+    gapNextOpen: new Array(GAP_LOG).fill(0),
+    gaps: 0,
   };
   resetSpawner(sp, cfg, seed);
   return sp;
@@ -277,6 +289,8 @@ export function resetSpawner(sp, cfg, seed = sp.rng.seed, startS = 0) {
   sp.randomRows = 0;
   sp.dropped = 0;
   sp.active = 0;
+  for (let k = 0; k < GAP_LOG; k++) sp.gapFrom[k] = sp.gapTo[k] = sp.gapPrevOpen[k] = sp.gapNextOpen[k] = 0;
+  sp.gaps = 0;
   // First row: a calm start, table pattern, no stagger.
   const first = pickPattern(sp.rng, 0);
   const s0 = startS + cfg.FIRST_ROW_DISTANCE;
@@ -287,6 +301,24 @@ export function resetSpawner(sp, cfg, seed = sp.rng.seed, startS = 0) {
   sp.next.anchor = s0;
   sp.next.earliest = s0;
   sp.next.latest = s0;
+  // The run-up before the first row is a gap too (every lane is open behind it).
+  logGap(sp, startS, s0, (1 << LANES) - 1, openMask(sp.next.types));
+}
+
+/** Bitmask of the lanes of a row that are not BLOCK. */
+export function openMask(types) {
+  let m = 0;
+  for (let i = 0; i < LANES; i++) if (types[i] !== OB.BLOCK) m |= 1 << i;
+  return m;
+}
+
+function logGap(sp, from, to, prevOpen, nextOpen) {
+  const k = sp.gaps % GAP_LOG;
+  sp.gapFrom[k] = from;
+  sp.gapTo[k] = to;
+  sp.gapPrevOpen[k] = prevOpen;
+  sp.gapNextOpen[k] = nextOpen;
+  sp.gaps++;
 }
 
 function spawnRow(sp, row) {
@@ -474,6 +506,7 @@ export function updateSpawner(sp, scroll, speed, elapsed, cfg) {
     spawnRow(sp, sp.next);
     copyRow(sp.last, sp.next);
     planNext(sp, scroll, speed, elapsed, cfg);
+    logGap(sp, sp.last.latest, sp.next.earliest, openMask(sp.last.types), openMask(sp.next.types));
   }
 }
 

@@ -5,6 +5,7 @@
 export function createSparks(max) {
   return {
     max,
+    enabled: true, // false (LOW quality): emitSparks and stepSparks do nothing
     next: 0, // ring index for the next emission
     x: new Float32Array(max),
     y: new Float32Array(max),
@@ -27,6 +28,7 @@ export function clearSparks(sp) {
  * bias `up` (0..1) and a sideways bias `dirX` (−1..1, 0 = all round).
  */
 export function emitSparks(sp, x, y, z, n, speed, up, dirX, rng, cfg) {
+  if (!sp.enabled) return;
   for (let k = 0; k < n; k++) {
     const i = sp.next;
     sp.next = sp.next + 1 === sp.max ? 0 : sp.next + 1;
@@ -51,6 +53,7 @@ export function emitSparks(sp, x, y, z, n, speed, up, dirX, rng, cfg) {
  */
 export function stepSparks(sp, dt, scrollDelta, cfg) {
   let alive = 0;
+  if (!sp.enabled) return alive;
   const drag = Math.exp(-cfg.SPARK_DRAG * dt);
   for (let i = 0; i < sp.max; i++) {
     if (sp.life[i] <= 0) continue;

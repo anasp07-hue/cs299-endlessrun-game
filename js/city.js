@@ -704,6 +704,7 @@ export function createCity(scene, renderer, cfg) {
       glitchTex.needsUpdate = true;
     }
 
+    if (!dust.visible) return; // LOW quality: no dust, so skip the per-particle work and the upload
     const a = dustPos.array;
     const AX = cfg.DUST_AREA_X;
     const AY = cfg.DUST_AREA_Y;

@@ -5,7 +5,10 @@
 // Same legacy prefix as the high score (ADR-0010): saves survive the rename.
 export const SETTINGS_KEY = 'neonWasteland.settings';
 
-export const DEFAULT_SETTINGS = Object.freeze({ muted: false });
+/** Graphics quality (Phase 8, ADR-0016). */
+export const QUALITY = Object.freeze({ HIGH: 'high', LOW: 'low' });
+
+export const DEFAULT_SETTINGS = Object.freeze({ muted: false, quality: QUALITY.HIGH });
 
 /**
  * Stored JSON → settings: known keys of the right type are taken, everything
@@ -22,6 +25,7 @@ export function parseSettings(raw) {
   }
   if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) return out;
   if (typeof obj.muted === 'boolean') out.muted = obj.muted;
+  if (obj.quality === QUALITY.HIGH || obj.quality === QUALITY.LOW) out.quality = obj.quality;
   return out;
 }
 
@@ -38,9 +42,29 @@ export function loadSettings(storage) {
 export function saveSettings(storage, settings) {
   if (!storage) return false;
   try {
-    storage.setItem(SETTINGS_KEY, JSON.stringify({ muted: settings.muted === true }));
+    const quality = settings.quality === QUALITY.LOW ? QUALITY.LOW : QUALITY.HIGH;
+    storage.setItem(SETTINGS_KEY, JSON.stringify({ muted: settings.muted === true, quality }));
     return true;
   } catch {
     return false;
   }
+}
+
+/** The other quality level. */
+export function toggleQuality(q) {
+  return q === QUALITY.LOW ? QUALITY.HIGH : QUALITY.LOW;
+}
+
+/**
+ * What a quality level turns on. LOW renders at most 1 pixel per CSS pixel and
+ * drops the particle systems (dust, sparks). The game has no shadows to toggle
+ * (SPEC §5: shadows off), so resolution takes their place (ADR-0016).
+ * Gameplay is identical at both levels.
+ */
+export function qualityProfile(q, cfg) {
+  const low = q === QUALITY.LOW;
+  return {
+    pixelRatioMax: low ? cfg.PIXEL_RATIO_MAX_LOW : cfg.PIXEL_RATIO_MAX,
+    particles: !low,
+  };
 }

@@ -209,6 +209,14 @@ export function createAudio(cfg) {
     burst(ctx.currentTime, 0.14, 0.35, 'highpass', 2600, 5200, sfx, lanePan);
   }
 
+  /** Data shard pickup: a soft glassy two-note chime that climbs with each shard of a line (`step` 0, 1, 2…). */
+  function shard(step) {
+    if (!ready()) return;
+    const t = ctx.currentTime;
+    const f = NOTE(ARP[step % ARP.length] + 12);
+    tone('sine', f, f, t, 0.09, 0.16, sfx, 0.003);
+    tone('triangle', f * 1.5, f * 1.5, t + 0.045, 0.14, 0.08, sfx, 0.003);
+  }
   function click() {
     if (!ready()) return;
     tone('sine', 1250, 1250, ctx.currentTime, 0.035, 0.12, sfx, 0.002);
@@ -274,5 +282,5 @@ export function createAudio(cfg) {
     }
   }
 
-  return { unlock, setMuted, setHidden, setIntensity, setDuck, jump, land, slide, stumble, caught, nearMiss, click, crackle, isReady: ready };
+  return { unlock, setMuted, setHidden, setIntensity, setDuck, jump, land, slide, stumble, caught, nearMiss, shard, click, crackle, isReady: ready };
 }

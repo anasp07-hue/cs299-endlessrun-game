@@ -23,3 +23,8 @@ export function scoreMultiplier(distance, cfg) {
 export function addScore(score, speed, dt, distance, cfg) {
   return score + speed * dt * scoreMultiplier(distance, cfg);
 }
+
+/** Points for collecting `n` data shards at this distance (SHARD_POINTS each × the multiplier; ADR-0016). */
+export function shardScore(n, distance, cfg) {
+  return n * cfg.SHARD_POINTS * scoreMultiplier(distance, cfg);
+}

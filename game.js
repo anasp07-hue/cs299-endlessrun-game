@@ -1,4 +1,7 @@
 // Apocalypse Run — browser entry point.
+// Phase 8: data-shard collectibles (js/logic/shards.js: glowing diamonds laid
+// between obstacle rows, bonus points, a HUD counter) and a LOW / HIGH quality
+// setting (resolution + particles), saved with the other settings (ADR-0016).
 // Phase 7: audio and juice (js/audio.js generates every sound in code;
 // js/logic/juice.js + particles.js, ADR-0015): SFX, a generative music loop,
 // mute (M / buttons, saved), camera shake, landing squash, sparks, and a
@@ -41,7 +44,7 @@ import {
 import { createHacker, createAgent, applyPose } from './js/characters.js';
 import { createCity, makeRoadTexture, applySkyFog, softDotTexture } from './js/city.js';
 import { createAudio } from './js/audio.js';
-import { loadSettings, saveSettings } from './js/logic/settings.js';
+import { loadSettings, saveSettings, QUALITY, toggleQuality, qualityProfile } from './js/logic/settings.js';
 import {
   createShake, resetShake, addTrauma, stepShake, shakeOffset, squashScale, landingStrength, nearMissFlash,
 } from './js/logic/juice.js';
@@ -150,6 +153,21 @@ for (const t of [OB.LOW, OB.HIGH, OB.BLOCK]) {
 }
 const scratchMatrix = new THREE.Matrix4();
 
+// --- Data shards (js/logic/shards.js, ADR-0016): one InstancedMesh -------------
+// A tall glowing diamond in the UI's glowBlue: cold like the city's screens,
+// and clearly not an obstacle cue (amber / white / red). Spins and bobs a
+// little (inside its pickup box); unlit, with the same sky fog as the obstacles.
+const shardGeo = new THREE.OctahedronGeometry(1, 0);
+shardGeo.scale(CONFIG.SHARD_VISUAL_W, CONFIG.SHARD_VISUAL_H, CONFIG.SHARD_VISUAL_W);
+const shardMesh = new THREE.InstancedMesh(
+  shardGeo,
+  applySkyFog(new THREE.MeshBasicMaterial({ color: PALETTE.glowBlue }), CONFIG, 'shard'),
+  CONFIG.MAX_SHARDS,
+);
+shardMesh.count = 0;
+shardMesh.frustumCulled = false;
+scene.add(shardMesh);
+
 // --- Run state ----------------------------------------------------------------
 // One run object for the whole session; resetRun() (js/logic/run.js) restores
 // every piece of it on Play / Play Again / Restart / Main Menu.
@@ -176,7 +194,7 @@ try {
   storage = null; // the game still works; it just won't remember the high score
 }
 let highScore = loadHighScore(storage);
-const settings = loadSettings(storage); // { muted }
+const settings = loadSettings(storage); // { muted, quality }
 
 // --- UI elements --------------------------------------------------------------
 const $ = (id) => document.getElementById(id);
@@ -220,10 +238,17 @@ function createDigitDisplay(el, slots) {
 }
 const hudScore = createDigitDisplay($('hud-score'), CONFIG.HUD_DIGITS);
 const hudBest = createDigitDisplay($('hud-best'), CONFIG.HUD_DIGITS);
+const hudShards = createDigitDisplay($('hud-shards'), CONFIG.HUD_SHARD_DIGITS);
+const finalShardsEl = $('final-shards');
 
 let hudShownScore = -1;
 let hudShownBest = -1;
+let hudShownShards = -1;
 function updateHud() {
+  if (run.shardCount !== hudShownShards) {
+    hudShards.update(run.shardCount);
+    hudShownShards = run.shardCount;
+  }
   const s = finalScore(run.score);
   const best = s > highScore ? s : highScore; // BEST tracks you live once you pass it
   if (s !== hudShownScore) {
@@ -316,6 +341,7 @@ function onRunEnded() {
   const isNew = commitHighScore(final);
   finalScoreEl.textContent = String(final);
   finalBestEl.textContent = String(highScore);
+  finalShardsEl.textContent = String(run.shardCount);
   newHighBadge.hidden = !isNew;
 
   if (DEBUG) {
@@ -454,7 +480,7 @@ const squash = { y: 1, xz: 1 };
 const sparks = createSparks(CONFIG.SPARK_MAX);
 const sparkRng = createRng(99);
 const fx = {
-  jumps: 0, landings: 0, slides: 0, stumbles: 0, near: 0, catching: false,
+  jumps: 0, landings: 0, slides: 0, stumbles: 0, near: 0, catching: false, shards: 0, shardStreak: 0, shardAt: -99,
   landAge: 99, landStrength: 0, flashAge: 99, lastScroll: NaN, flashShown: -1,
 };
 const flashEl = $('flash');
@@ -484,6 +510,9 @@ function resetFx() {
   fx.slides = p.slides;
   fx.stumbles = run.chaser.stumbles;
   fx.near = run.nearMisses;
+  fx.shards = run.shardCount;
+  fx.shardStreak = 0;
+  fx.shardAt = -99;
   fx.catching = run.chaser.catching;
   fx.landAge = 99;
   fx.landStrength = 0;
@@ -518,14 +547,14 @@ function updateFx(dt) {
     audio.stumble(c.stumbleDir);
     addTrauma(shake, CONFIG.TRAUMA_STUMBLE);
     // Sparks off the side that hit, flying the way the bounce goes.
-    emitSparks(sparks, p.x - c.stumbleDir * 0.45, 1.0, 0, 26, 6, 0.55, c.stumbleDir, sparkRng, CONFIG);
+    spark(p.x - c.stumbleDir * 0.45, 1.0, 0, 26, 6, 0.55, c.stumbleDir);
   }
   if (c.catching !== fx.catching) {
     fx.catching = c.catching;
     if (c.catching) {
       audio.caught();
       addTrauma(shake, CONFIG.TRAUMA_CATCH);
-      emitSparks(sparks, p.x, 1.1, 0, 34, 7, 0.6, 0, sparkRng, CONFIG);
+      spark(p.x, 1.1, 0, 34, 7, 0.6, 0);
     }
   }
   if (run.nearMisses !== fx.near) {
@@ -534,6 +563,14 @@ function updateFx(dt) {
     const lx = laneX(run.nearMissLane, CONFIG.LANE_WIDTH, CONFIG.LANE_COUNT);
     audio.nearMiss(Math.max(-0.8, Math.min(0.8, (lx - p.x) / CONFIG.LANE_WIDTH)));
     addTrauma(shake, CONFIG.TRAUMA_NEAR_MISS);
+  }
+  if (run.shardCount !== fx.shards) {
+    // A line of shards picked up in quick succession climbs in pitch.
+    fx.shardStreak = run.elapsed - fx.shardAt < CONFIG.SHARD_STREAK_TIME ? fx.shardStreak + 1 : 0;
+    fx.shardAt = run.elapsed;
+    fx.shards = run.shardCount;
+    audio.shard(fx.shardStreak);
+    spark(p.x, CONFIG.SHARD_Y, 0, 6, 3, 0.4, 0);
   }
   // Effects age (and the world-attached sparks move) only while the run is live.
   if (state === STATE.PLAYING) {
@@ -557,7 +594,7 @@ function emitAmbientSparks(s, dt) {
     const rate = CONFIG.SPARK_AMBIENT_RATE * (under ? 5 : 1);
     if (sparkRng.next() < rate * dt) {
       const x = laneX(o.lane, CONFIG.LANE_WIDTH, CONFIG.LANE_COUNT) + sparkRng.range(-0.9, 0.9);
-      emitSparks(sparks, x, CONFIG.HIGH_BOTTOM, z, under ? 4 : 1 + sparkRng.int(2), 2.2, 0.1, 0, sparkRng, CONFIG);
+      spark(x, CONFIG.HIGH_BOTTOM, z, under ? 4 : 1 + sparkRng.int(2), 2.2, 0.1, 0); // crackle still plays on LOW quality
       if (z > -12) audio.crackle();
     }
   }
@@ -570,8 +607,21 @@ function renderFx(s, dt) {
   fx.lastScroll = s;
   if (live) {
     emitAmbientSparks(s, dt);
-    stepSparks(sparks, dt, delta, CONFIG);
+    stepSparks(sparks, dt, delta, CONFIG); // no-op on LOW quality (sparks.enabled)
   }
+  if (sparks.enabled) uploadSparks();
+
+  squashScale(fx.landAge, fx.landStrength, CONFIG, squash);
+  hacker.root.scale.set(squash.xz, squash.y, squash.xz);
+
+  const o = nearMissFlash(fx.flashAge, CONFIG);
+  if (o !== fx.flashShown) {
+    flashEl.style.opacity = o === 0 ? '0' : String(o); // only touched when it changes
+    fx.flashShown = o;
+  }
+}
+
+function uploadSparks() {
   const a = sparkPos.array;
   const col = sparkCol.array;
   for (let i = 0; i < sparks.max; i++) {
@@ -586,16 +636,39 @@ function renderFx(s, dt) {
   }
   sparkPos.needsUpdate = true;
   sparkCol.needsUpdate = true;
-
-  squashScale(fx.landAge, fx.landStrength, CONFIG, squash);
-  hacker.root.scale.set(squash.xz, squash.y, squash.xz);
-
-  const o = nearMissFlash(fx.flashAge, CONFIG);
-  if (o !== fx.flashShown) {
-    flashEl.style.opacity = o === 0 ? '0' : String(o); // only touched when it changes
-    fx.flashShown = o;
-  }
 }
+
+// --- Quality setting (Phase 8, ADR-0016) ------------------------------------------
+// LOW: at most 1 render pixel per CSS pixel, no dust, no sparks. Gameplay and
+// sound are identical at both levels. Saved with the other settings.
+let pixelRatioMax = CONFIG.PIXEL_RATIO_MAX;
+
+/** Emit sparks (a no-op on LOW quality: the pool itself is switched off). */
+function spark(x, y, z, n, speed, up, dirX) {
+  emitSparks(sparks, x, y, z, n, speed, up, dirX, sparkRng, CONFIG);
+}
+
+const qualityButtons = document.querySelectorAll('.js-quality');
+function applyQuality() {
+  const prof = qualityProfile(settings.quality, CONFIG);
+  pixelRatioMax = prof.pixelRatioMax;
+  onResize(); // applies the new pixel-ratio cap
+  sparks.enabled = prof.particles;
+  city.dust.visible = prof.particles; // city.update skips hidden dust
+  sparkPoints.visible = prof.particles;
+  if (!prof.particles) clearSparks(sparks);
+  const label = settings.quality === QUALITY.LOW ? 'QUALITY: LOW' : 'QUALITY: HIGH';
+  for (const el of qualityButtons) el.textContent = label;
+}
+for (const el of qualityButtons) {
+  el.addEventListener('click', () => {
+    settings.quality = toggleQuality(settings.quality);
+    saveSettings(storage, settings); // fails quietly without storage: still applies this session
+    applyQuality();
+    audio.click();
+  });
+}
+applyQuality();
 
 // --- Resize -----------------------------------------------------------------
 function onResize() {
@@ -603,7 +676,7 @@ function onResize() {
   const h = window.innerHeight;
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, CONFIG.PIXEL_RATIO_MAX));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioMax));
   renderer.setSize(w, h);
 }
 window.addEventListener('resize', onResize);
@@ -710,6 +783,27 @@ function render(alpha, dt) {
     m.instanceMatrix.needsUpdate = true;
   }
 
+  // Data shards: same interpolated scroll; spin and bob on the view clock.
+  let ns = 0;
+  const shardSlots = run.shards.slots;
+  for (let i = 0; i < shardSlots.length; i++) {
+    const o = shardSlots[i];
+    if (!o.active) continue;
+    scratchMatrix.makeRotationY(cityTime * CONFIG.SHARD_SPIN + o.s * 0.9);
+    scratchMatrix.setPosition(
+      laneX(o.lane, CONFIG.LANE_WIDTH, CONFIG.LANE_COUNT),
+      CONFIG.SHARD_Y + Math.sin(cityTime * 3 + o.s) * CONFIG.SHARD_BOB,
+      s - o.s,
+    );
+    shardMesh.setMatrixAt(ns++, scratchMatrix);
+  }
+  shardMesh.count = ns;
+  if (ns > 0) {
+    shardMesh.instanceMatrix.clearUpdateRanges();
+    shardMesh.instanceMatrix.addUpdateRange(0, ns * 16);
+    shardMesh.instanceMatrix.needsUpdate = true;
+  }
+
   // Camera: behind and above, partly following the player's lane.
   cameraX = damp(cameraX, px * CONFIG.CAMERA_FOLLOW_X, CONFIG.CAMERA_FOLLOW_RATE, dt);
   shakeOffset(shake, CONFIG, shakeOut);
@@ -753,7 +847,7 @@ renderer.setAnimationLoop(loop);
 if (DEBUG) {
   window.__neon = {
     THREE, renderer, scene, camera, run, hacker, agent, roadSegments, city, debug, CMD, STATE,
-    audio, settings, shake, sparks, fx,
+    audio, settings, shake, sparks, fx, shardMesh, applyQuality,
     getState: () => state,
     dispatch,
     getHighScore: () => highScore,

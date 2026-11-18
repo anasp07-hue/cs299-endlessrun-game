@@ -39,6 +39,7 @@ export const CONFIG = Object.freeze({
   // --- Game states & UI (SPEC §4) ---
   GAMEOVER_INPUT_DELAY: 0.6, // seconds before Enter/Space can restart, so a mashed jump can't skip the game-over screen
   HUD_DIGITS: 9, // digit slots in the HUD score readouts (999,999,999 max)
+  HUD_SHARD_DIGITS: 5, // digit slots in the HUD shard counter
 
   // --- Spawning & fairness (SPEC §3.4, ADR-0006) ---
   SPAWN_AHEAD: 160, // rows appear beyond the camera far plane, so they never pop into view
@@ -232,6 +233,29 @@ export const CONFIG = Object.freeze({
   MUSIC_BPM: 92,
   MUSIC_VOLUME: 0.32,
   SFX_VOLUME: 0.55,
+
+  // --- Data shards (SPEC §3.7, Phase 8, ADR-0016) ---
+  // Optional pickups laid in the open stretch between two obstacle rows, never
+  // overlapping an obstacle. They use their own RNG, so the obstacle sequence
+  // for a seed is unchanged.
+  SHARD_RUN_CHANCE: 0.5, // chance a gap between rows gets a line of shards
+  SHARD_RUN_MIN: 3, // a gap too short for this many is left empty
+  SHARD_RUN_MAX: 5,
+  SHARD_SPACING: 2.2, // units between shards in a line
+  SHARD_Y: 0.85, // centre height: collected standing or sliding, missed when jumping over
+  SHARD_HIT_W: 1.0, // pickup box (x)...
+  SHARD_HIT_H: 0.8, // ...(y: 0.45–1.25, so the slide box, top 0.68, still reaches it)...
+  SHARD_HIT_D: 0.8, // ...(z)
+  SHARD_POINTS: 25, // × the distance multiplier, per shard
+  MAX_SHARDS: 48, // pooled; a line that doesn't fit is cut short (never crashes)
+  SHARD_VISUAL_W: 0.23, // half-width of the drawn diamond (inside SHARD_HIT_W / 2)
+  SHARD_VISUAL_H: 0.33, // half-height; plus SHARD_BOB it stays inside SHARD_HIT_H / 2
+  SHARD_SPIN: 2.4, // radians per second
+  SHARD_BOB: 0.07, // units up and down
+  SHARD_STREAK_TIME: 0.6, // pickups closer together than this climb in pitch (one line)
+
+  // --- Quality setting (Phase 8, ADR-0016) ---
+  PIXEL_RATIO_MAX_LOW: 1, // LOW quality renders at 1 pixel per CSS pixel and drops dust + sparks
 
   // --- Ground segments (recycled; SPEC §7.2 World) ---
   GROUND_SEGMENT_LENGTH: 20,

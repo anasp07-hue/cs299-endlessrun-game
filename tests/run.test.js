@@ -16,6 +16,7 @@ function snapshot(run) {
   const plain = JSON.parse(JSON.stringify(run));
   plain.spawner.rngState = run.spawner.rng.getState();
   plain.spawner.rngSeed = run.spawner.rng.seed;
+  plain.shards.rngState = run.shards.rng.getState(); // Phase 8: the shard RNG is run state too
   return plain;
 }
 
