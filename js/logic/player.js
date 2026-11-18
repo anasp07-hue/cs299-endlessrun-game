@@ -38,6 +38,7 @@ export function createPlayer(cfg) {
     fromLane: 0,
     restLane: 0,
     moving: false,
+    bouncing: false, // a stumble is bouncing us back to restLane: lane input is locked until we get there
     laneT: 0, // seconds into the current lane move
     fromX: 0,
     toX: 0,
@@ -70,6 +71,7 @@ export function resetPlayer(p, cfg) {
   p.fromLane = center;
   p.restLane = center;
   p.moving = false;
+  p.bouncing = false;
   p.laneT = 0;
   p.fromX = cx;
   p.toX = cx;
@@ -105,6 +107,7 @@ function startLaneMove(p, dir, cfg) {
  * Moves that would leave the road are ignored. Returns true if accepted.
  */
 export function queueLaneMove(p, dir, cfg) {
+  if (p.bouncing) return false; // no steering back through the obstacle we just bounced off
   let pending = 0;
   for (let i = 0; i < p.queueLen; i++) pending += p.queue[i];
   const finalLane = p.lane + pending + dir;
@@ -127,6 +130,24 @@ export function queueLaneMove(p, dir, cfg) {
     return true;
   }
   return false;
+}
+
+/**
+ * Side-clip stumble (SPEC §3.6, ADR-0011): drop any queued moves and head
+ * back to restLane, the last lane we actually stood in (not fromLane, which
+ * after a mid-move reversal can be a lane we never reached). Lane input is
+ * ignored until we arrive; jump and slide still work.
+ */
+export function bounceBack(p, cfg) {
+  for (let i = 0; i < p.queue.length; i++) p.queue[i] = 0;
+  p.queueLen = 0;
+  p.fromLane = p.lane;
+  p.lane = p.restLane;
+  p.fromX = p.x;
+  p.toX = laneX(p.restLane, cfg.LANE_WIDTH, cfg.LANE_COUNT);
+  p.laneT = 0;
+  p.moving = true;
+  p.bouncing = true;
 }
 
 function doJump(p, cfg) {
@@ -176,6 +197,7 @@ export function stepPlayer(p, dt, cfg) {
     if (t >= 1) {
       p.x = p.toX;
       p.moving = false;
+      p.bouncing = false;
       p.fromLane = p.lane;
       p.restLane = p.lane;
       if (p.queueLen > 0) {

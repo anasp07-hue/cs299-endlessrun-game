@@ -223,7 +223,8 @@ export function createSpawner(cfg, seed = 0) {
   }
   const slots = [];
   for (let i = 0; i < cfg.MAX_OBSTACLES; i++) {
-    slots.push({ active: false, type: OB.NONE, lane: 0, s: 0, row: 0 });
+    // ignored: side-clipped this pass, so it can't hit twice (ADR-0011)
+    slots.push({ active: false, type: OB.NONE, lane: 0, s: 0, row: 0, ignored: false });
   }
   const sp = {
     rng: createRng(seed),
@@ -264,6 +265,7 @@ export function resetSpawner(sp, cfg, seed = sp.rng.seed, startS = 0) {
     o.lane = 0;
     o.s = 0;
     o.row = 0;
+    o.ignored = false;
   }
   clearRow(sp.last);
   clearRow(sp.next);
@@ -303,6 +305,7 @@ function spawnRow(sp, row) {
     o.lane = lane;
     o.s = row.s[lane];
     o.row = sp.rows;
+    o.ignored = false;
     sp.active++;
   }
 }
@@ -469,13 +472,13 @@ export function updateSpawner(sp, scroll, speed, elapsed, cfg) {
   }
 }
 
-/** Index of the first live obstacle overlapping `playerBox`, or -1. */
+/** Index of the first live, non-ignored obstacle overlapping `playerBox`, or -1. */
 export function findHit(sp, playerBox, scroll, cfg, scratchBox) {
   // Overlap needs |z| < obstacle half-depth + player half-depth <= rowMargin.
   const reach = rowMargin(cfg);
   for (let i = 0; i < sp.slots.length; i++) {
     const o = sp.slots[i];
-    if (!o.active) continue;
+    if (!o.active || o.ignored) continue;
     const z = scroll - o.s;
     if (z < -reach || z > reach) continue; // can't be touching: skip the full test
     setObstacleBox(scratchBox, o.type, o.lane, z, cfg);

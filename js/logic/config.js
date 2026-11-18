@@ -23,6 +23,8 @@ export const CONFIG = Object.freeze({
   // --- Lighting ---
   HEMI_INTENSITY: 1.4,
   SUN_INTENSITY: 1.6,
+  RUNNER_LIGHT_INTENSITY: 14, // soft cold light behind/above the Hacker so his dark outfit keeps a silhouette
+  RUNNER_LIGHT_RANGE: 7, // units: it only lights the runner, the Agent when close, and a pool of road
 
   // --- Speed & difficulty (SPEC §3.5) ---
   SPEED_START: 12, // units per second
@@ -86,6 +88,23 @@ export const CONFIG = Object.freeze({
   PLAYER_HEIGHT: 1.8,
   PLAYER_SLIDE_HEIGHT: 0.8,
   HITBOX_SCALE: 0.85, // collision box is 15% smaller than the visual, so near-misses feel lucky
+
+  // --- Stumble & chaser (SPEC §3.6, ADR-0011) ---
+  STUMBLE_WINDOW: 8, // seconds: a second side clip within this window means caught
+  CHASER_GAP_NORMAL: 12, // units behind the player: behind the camera (CAMERA_Z), so off-screen
+  CHASER_GAP_STUMBLE: 3.8, // right after a stumble: in view just below the player (closer covers their feet)
+  CHASER_CLOSE_SPEED: 30, // units/s the Agent lunges in after a stumble (12 → 3.8 in ~0.3 s)
+  CHASER_CATCH_GAP: 1.1, // where the Agent ends up when he catches you
+  CATCH_TIME: 0.6, // seconds of the catch "beat" before the game-over screen
+  TRAIL_STEPS: 256, // steps of player path the Agent follows (~2.1 s; he needs ≤ GAP_NORMAL / SPEED_START = 1 s)
+
+  // --- Character animation (view only; js/logic/pose.js, ADR-0012) ---
+  RUN_CYCLE_BASE: 1.3, // run cycles per second at speed 0 (one cycle = two steps)
+  RUN_CYCLE_PER_SPEED: 0.05, // extra cycles/s per unit/s of speed (≈1.9 at start, ≈3.05 at max)
+  STUMBLE_ANIM_TIME: 0.45, // seconds the stumble flail lasts
+  POSE_BLEND_RATE: 14, // 1/s: how fast poses blend between run / air / slide
+  AGENT_AIR_Y: 0.02, // the Agent switches to his jump pose when his path is this high off the road
+  CATCH_REACH_AT: 0.6, // fraction of the catch beat by which the Agent's arms are fully out
 
   // --- Ground segments (recycled; SPEC §7.2 World) ---
   GROUND_SEGMENT_LENGTH: 20,

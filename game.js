@@ -1,9 +1,11 @@
 // Apocalypse Run — browser entry point.
-// Phase 3: game states (MENU / PLAYING / PAUSED / GAMEOVER) with HTML overlay
-// screens, a live HUD, auto-pause on blur, Play Again with a full run reset,
-// and a persistent high score (ADR-0008). Underneath: the endless road,
-// placeholder player box, color-coded placeholder obstacles from a fair
-// pattern spawner (ADR-0006/0007), AABB collision, and the speed ramp.
+// Phase 4: the procedural Hacker and Agent rigs (js/characters.js, poses in
+// js/logic/pose.js, ADR-0012) and the side-clip stumble: bounce back, the
+// Agent closes in, a second stumble or a head-on hit plays a short catch beat
+// before the game-over screen (ADR-0011). Phase 3 underneath: game states
+// with HTML overlays, HUD, auto-pause, Play Again with a full reset, and a
+// persistent high score (ADR-0008); the endless road, color-coded placeholder
+// obstacles from a fair pattern spawner (ADR-0006/0007), and the speed ramp.
 // Game rules live in js/logic/ (ADR-0001); the loop runs a fixed-step
 // simulation with render interpolation (ADR-0005).
 
@@ -11,15 +13,22 @@ import * as THREE from './libs/three.module.js';
 import { CONFIG } from './js/logic/config.js';
 import { clampDt } from './js/logic/time.js';
 import { createFixedStepper } from './js/logic/loop.js';
-import { lerp, damp } from './js/logic/math.js';
+import { lerp, damp, easeOutQuad } from './js/logic/math.js';
 import { segmentZ, laneX } from './js/logic/world.js';
 import { createRng } from './js/logic/rng.js';
 import { actionForKeyEvent } from './js/logic/input.js';
-import { queueLaneMove, requestJump, requestSlide, playerHeight } from './js/logic/player.js';
+import { queueLaneMove, requestJump, requestSlide, jumpVelocity } from './js/logic/player.js';
 import { difficultyAt } from './js/logic/difficulty.js';
 import { OB, obstacleBottom, obstacleTop, obstacleDepth } from './js/logic/collision.js';
 import { resetSpawner } from './js/logic/spawner.js';
-import { createRun, resetRun, stepRun, freezeInterpolation } from './js/logic/run.js';
+import { createRun, resetRun, stepRun, freezeInterpolation, acceptsInput } from './js/logic/run.js';
+import { chaserDelaySteps, catchProgress, agentInView } from './js/logic/chaser.js';
+import { sampleTrail } from './js/logic/trail.js';
+import {
+  createPose, blendPose, advancePhase, standPose, hackerRun, hackerAir, hackerSlide,
+  agentRun, agentAir, agentSlide, agentReach, hitWeight, hitOverlay,
+} from './js/logic/pose.js';
+import { createHacker, createAgent, applyPose } from './js/characters.js';
 import {
   STATE, CMD, nextState, startsNewRun, commandFor, shouldAutoPause, canRestart, abandonsRun,
 } from './js/logic/state.js';
@@ -56,6 +65,13 @@ scene.add(new THREE.HemisphereLight(PALETTE.skyGlow, PALETTE.asphalt, CONFIG.HEM
 const sun = new THREE.DirectionalLight(PALETTE.moonlight, CONFIG.SUN_INTENSITY); // cold moonlight key light
 sun.position.set(-4, 10, 6);
 scene.add(sun);
+// Follows the Hacker (x set in render): without it his near-black outfit
+// vanishes against the night road (art-direction: "subtle rim light").
+const runnerLight = new THREE.PointLight(
+  PALETTE.glowPale, CONFIG.RUNNER_LIGHT_INTENSITY, CONFIG.RUNNER_LIGHT_RANGE, 2,
+);
+runnerLight.position.set(0, 2.6, 2.4);
+scene.add(runnerLight);
 
 // --- Ground: recycled road segments (one shared geometry/material/texture) ---
 function makeRoadTexture() {
@@ -116,14 +132,12 @@ const floor = new THREE.Mesh(
 floor.position.set(0, -0.02, CONFIG.GROUND_BACK_Z - CONFIG.FLOOR_SIZE / 2);
 scene.add(floor);
 
-// --- Player: placeholder box, feet at y = 0 (replaced by the Hacker in Phase 4) ---
-const playerGeo = new THREE.BoxGeometry(CONFIG.PLAYER_WIDTH, CONFIG.PLAYER_HEIGHT, CONFIG.PLAYER_WIDTH);
-playerGeo.translate(0, CONFIG.PLAYER_HEIGHT / 2, 0);
-const playerMesh = new THREE.Mesh(
-  playerGeo,
-  new THREE.MeshLambertMaterial({ color: PALETTE.glowBlue, emissive: PALETTE.glowBlue, emissiveIntensity: 0.2 }),
-);
-scene.add(playerMesh);
+// --- Characters: the Hacker (player) and the Agent (chaser), feet at y = 0 ---
+const hacker = createHacker();
+scene.add(hacker.root);
+const agent = createAgent();
+agent.root.visible = false;
+scene.add(agent.root);
 
 // --- Obstacles: one InstancedMesh per type (3 draw calls total), pooled ------
 // Placeholder color cues from the art-direction skill: LOW = hazard amber,
@@ -280,6 +294,9 @@ function dispatch(cmd) {
   const from = state;
   const to = nextState(from, cmd);
   if (to === null) return false;
+  // The catch beat is part of losing: no pausing out of it (key, button, or
+  // blur), or Restart / Main Menu could skip the game-over screen.
+  if (cmd === CMD.PAUSE && !acceptsInput(run)) return false;
 
   if (abandonsRun(from, cmd)) commitHighScore(run.score); // before the reset wipes it
   if (startsNewRun(from, cmd)) {
@@ -289,6 +306,7 @@ function dispatch(cmd) {
   if (cmd === CMD.PAUSE) freezeInterpolation(run); // pause shows the latest frame exactly
   if (cmd === CMD.MENU) resetRun(run, CONFIG, nextSeed()); // menu shows a clean road
   if (cmd === CMD.CAUGHT) onRunEnded();
+  if (startsNewRun(from, cmd) || cmd === CMD.MENU) resetCharacterView();
   if (to === STATE.PLAYING) stepper.reset(); // no time debt carried into the run or across a pause
   if (to === STATE.MENU) {
     syncHighScore();
@@ -313,8 +331,9 @@ function onRunEnded() {
   if (DEBUG) {
     const o = run.spawner.slots[run.hitSlot];
     const name = o ? ['', 'LOW', 'HIGH', 'BLOCK'][o.type] : '?';
+    const how = ['?', 'head-on', 'second stumble'][run.caughtBy];
     console.info(
-      `[Apocalypse Run] CAUGHT by a ${name} obstacle in lane ${o ? o.lane : '?'}. ` +
+      `[Apocalypse Run] CAUGHT (${how}) by a ${name} obstacle in lane ${o ? o.lane : '?'}. ` +
         `Score ${final}, distance ${Math.floor(run.scroll)}, ${run.elapsed.toFixed(1)} s, seed ${run.seed}.`,
     );
   }
@@ -348,6 +367,10 @@ function onKeyDown(e) {
 
   const cmd = commandFor(state, action, gameOverAge, CONFIG);
   const p = run.player;
+  const live = acceptsInput(run); // gameplay keys are ignored during the catch beat
+  if (cmd === CMD.LEFT || cmd === CMD.RIGHT || cmd === CMD.JUMP || cmd === CMD.SLIDE) {
+    if (!live) return;
+  }
   if (cmd === CMD.LEFT) queueLaneMove(p, -1, CONFIG);
   else if (cmd === CMD.RIGHT) queueLaneMove(p, 1, CONFIG);
   else if (cmd === CMD.JUMP) requestJump(p, CONFIG);
@@ -397,6 +420,70 @@ function onResize() {
 }
 window.addEventListener('resize', onResize);
 
+// --- Character animation (view only; poses from js/logic/pose.js) -------------
+// Scratch poses and blend weights, allocated once. None of this is run state:
+// it only decides how the characters look, never what happens.
+const hackerPose = createPose();
+const agentPose = createPose();
+const tmpPose = createPose();
+const trailSample = { x: 0, y: 0, slide: 0 };
+const JUMP_V0 = jumpVelocity(CONFIG);
+const anim = { hackerPhase: 0, agentPhase: 0.5, airW: 0, slideW: 0, agentAirW: 0, agentSlideW: 0 };
+
+function resetCharacterView() {
+  anim.hackerPhase = 0;
+  anim.agentPhase = 0.5;
+  anim.airW = 0;
+  anim.slideW = 0;
+  anim.agentAirW = 0;
+  anim.agentSlideW = 0;
+}
+
+function updateCharacters(px, py, alpha, dt) {
+  const p = run.player;
+  const c = run.chaser;
+  const caught = c.catching || run.caught;
+  const live = state === STATE.PLAYING; // paused / game over: hold the last frame
+  const rate = CONFIG.POSE_BLEND_RATE;
+
+  // Hacker
+  hacker.root.position.set(px, py, 0);
+  if (state === STATE.MENU) {
+    standPose(hackerPose);
+  } else {
+    const t = live && !caught ? dt : 0; // frozen in place during the catch beat
+    anim.hackerPhase = advancePhase(anim.hackerPhase, run.speed, t, CONFIG);
+    anim.airW = damp(anim.airW, p.grounded ? 0 : 1, rate, t);
+    anim.slideW = damp(anim.slideW, p.sliding ? 1 : 0, rate, t);
+    hackerRun(hackerPose, anim.hackerPhase);
+    if (anim.airW > 0.001) blendPose(hackerPose, hackerAir(tmpPose, p.vy / JUMP_V0), anim.airW);
+    if (anim.slideW > 0.001) blendPose(hackerPose, hackerSlide(tmpPose), anim.slideW);
+    hitOverlay(hackerPose, hitWeight(c.hitAge, CONFIG, caught), c.stumbleDir);
+  }
+  applyPose(hacker, hackerPose);
+
+  // Agent: gap units behind (toward the camera), running the Hacker's path
+  // from gap/speed seconds ago, so he jumps, slides, and dodges what the
+  // Hacker just did. Hidden while he's behind the camera.
+  const gap = lerp(c.prevGap, c.gap, alpha);
+  agent.root.visible = state !== STATE.MENU && agentInView(gap, CONFIG);
+  if (!agent.root.visible) return;
+  // Sample the path at the player's interpolated time (one step behind the newest sample, plus alpha).
+  sampleTrail(run.trail, chaserDelaySteps(gap, run.speed, CONFIG) + (1 - alpha), trailSample);
+  agent.root.position.set(trailSample.x, trailSample.y, gap);
+  const t = live ? dt : 0; // he keeps running during the catch beat
+  anim.agentPhase = advancePhase(anim.agentPhase, run.speed, t, CONFIG);
+  anim.agentAirW = damp(anim.agentAirW, trailSample.y > CONFIG.AGENT_AIR_Y ? 1 : 0, rate, t);
+  anim.agentSlideW = damp(anim.agentSlideW, trailSample.slide, rate, t);
+  agentRun(agentPose, anim.agentPhase);
+  if (anim.agentAirW > 0.001) blendPose(agentPose, agentAir(tmpPose), anim.agentAirW);
+  if (anim.agentSlideW > 0.001) blendPose(agentPose, agentSlide(tmpPose), anim.agentSlideW);
+  if (caught) {
+    blendPose(agentPose, agentReach(tmpPose), easeOutQuad(catchProgress(c, CONFIG) / CONFIG.CATCH_REACH_AT));
+  }
+  applyPose(agent, agentPose);
+}
+
 // --- Main loop (SPEC §7.1, ADR-0005) ---------------------------------------
 let lastTime = performance.now();
 
@@ -409,12 +496,11 @@ function render(alpha, dt) {
     );
   }
 
-  // Player
+  // Characters
   const p = run.player;
   const px = lerp(p.prevX, p.x, alpha);
-  playerMesh.position.x = px;
-  playerMesh.position.y = lerp(p.prevY, p.y, alpha);
-  playerMesh.scale.y = playerHeight(p, CONFIG) / CONFIG.PLAYER_HEIGHT;
+  updateCharacters(px, lerp(p.prevY, p.y, alpha), alpha, dt);
+  runnerLight.position.x = px;
 
   // Obstacles: z from the same interpolated scroll as the road (no drift).
   obstacleMeshes[OB.LOW].count = 0;
@@ -469,7 +555,7 @@ renderer.setAnimationLoop(loop);
 // --- Debug (dev only): ?debug exposes internals for smoke tests -------------
 if (DEBUG) {
   window.__neon = {
-    THREE, renderer, scene, camera, run, playerMesh, roadSegments, debug, CMD, STATE,
+    THREE, renderer, scene, camera, run, hacker, agent, roadSegments, debug, CMD, STATE,
     getState: () => state,
     dispatch,
     getHighScore: () => highScore,

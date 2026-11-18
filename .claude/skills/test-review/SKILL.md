@@ -64,7 +64,7 @@ The project has no npm. Use what's already on the machine:
 
 ## Smoke test (in the browser)
 
-1. Start the server in the background: `python3 -m http.server 8000`.
+1. Start the server in the background: `python3 serve.py` (caching off, so the browser never runs stale modules).
 2. Open `http://localhost:8000` (use the `run` or `claude-in-chrome` skill if available).
 3. Check the console. There should be **zero** errors or warnings on load and during play.
 4. Walk through the acceptance criteria of the current phase (SPEC §9) plus this regression loop: menu → play → change lanes, jump, slide → pause/resume → die → Play Again → die → menu → refresh (high score persists).

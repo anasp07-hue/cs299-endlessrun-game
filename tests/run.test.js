@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { CONFIG } from '../js/logic/config.js';
 import { createRun, resetRun, stepRun, freezeInterpolation } from '../js/logic/run.js';
 import { queueLaneMove, requestJump, requestSlide } from '../js/logic/player.js';
+import { OB } from '../js/logic/collision.js';
 
 const STEP = CONFIG.SIM_STEP;
 
@@ -45,6 +46,28 @@ test('resetRun after a full run gives exactly the state of a fresh run (no lefto
     resetRun(run, CONFIG, nextSeed);
     assert.deepEqual(snapshot(run), snapshot(createRun(CONFIG, nextSeed)), `seed ${seed}`);
   }
+});
+
+test('resetRun also clears Phase 4 state: stumble window, chaser gap, ignored obstacles, catch beat', () => {
+  const run = createRun(CONFIG, 3);
+  // A hand-placed BLOCK in lane 0 (before the first spawned row) to side-clip.
+  const o = run.spawner.slots[run.spawner.slots.length - 1];
+  Object.assign(o, { active: true, type: OB.BLOCK, lane: 0, s: 20, row: 0, ignored: false });
+  run.spawner.active++;
+  while (20 - run.scroll > 0.6) stepRun(run, STEP, CONFIG);
+  queueLaneMove(run.player, -1, CONFIG);
+  for (let i = 0; i < 6; i++) stepRun(run, STEP, CONFIG); // 0.05 s: clipped, mid-bounce
+  assert.equal(run.chaser.stumbles, 1);
+  assert.equal(o.ignored, true);
+  assert.ok(run.clipSlot >= 0);
+  assert.ok(run.chaser.stumbleTimer > 0 && run.chaser.gap < CONFIG.CHASER_GAP_NORMAL);
+  playUntilCaught(run); // ends with a catch beat
+  assert.equal(run.caught, true);
+  assert.notEqual(run.caughtBy, 0);
+
+  resetRun(run, CONFIG, 77);
+  assert.deepEqual(snapshot(run), snapshot(createRun(CONFIG, 77)));
+  assert.equal(o.ignored, false);
 });
 
 test('a reset run replays identically to a fresh run with the same seed', () => {

@@ -30,6 +30,7 @@ endless-runner/
 ├── index.html          # Canvas container + all UI overlays (menus, HUD)
 ├── style.css           # UI styling (HUD, menus, pause, game over)
 ├── game.js             # Entry point: game loop, state, input, world, UI wiring
+├── serve.py            # Dev server: http.server with caching off (python3 serve.py)
 ├── js/
 │   ├── logic/          # Pure, DOM-free game rules (spawner, collision, physics, scoring, RNG…) — see ADR-0001
 │   │   ├── config.js   # The single frozen CONFIG object of tuning values
@@ -43,10 +44,14 @@ endless-runner/
 │   │   ├── difficulty.js # Speed curve, difficulty, score multiplier
 │   │   ├── collision.js # AABB boxes, player/obstacle hitboxes
 │   │   ├── spawner.js  # Pattern table, fair row spacing, obstacle pool (ADR-0006)
+│   │   ├── chaser.js   # Hit classification, stumble window, chaser gap, catch beat (ADR-0011)
+│   │   ├── trail.js    # Ring buffer of the player's recent path, which the Agent follows (ADR-0011)
+│   │   ├── pose.js     # Rig dimensions + character poses as plain joint angles (ADR-0012)
 │   │   ├── run.js      # One run's state, its full reset, and the fixed step (ADR-0008)
 │   │   ├── state.js    # MENU/PLAYING/PAUSED/GAMEOVER transitions, key → command per state
 │   │   ├── highscore.js # High-score parsing and load/save through an injected storage
 │   │   └── hud.js      # Allocation-free digit writer for the HUD
+│   ├── characters.js   # View: Hacker and Agent THREE.Group rigs, applyPose (ADR-0012)
 │   └── palette.js      # Color palette (mirrored as CSS vars in style.css)
 ├── tests/              # node --test 'tests/*.test.js'  (Node built-in runner, dev-only — see ADR-0002, ADR-0004)
 ├── docs/
@@ -67,12 +72,14 @@ endless-runner/
 **Note on modules:** Game *rules* live in pure modules under `js/logic/` from the start, so they can be tested in Node (ADR-0001). If the browser-side `game.js` grows past about 1,500 lines, split its view code into ES modules too (for example `js/player.js`, `js/world.js`, `js/ui.js`).
 
 ### Running locally (important)
-Browsers block ES-module imports over `file://`, so double-clicking `index.html` **will not work**. Serve the folder with any static server instead. This still works with no internet connection:
+Browsers block ES-module imports over `file://`, so double-clicking `index.html` **will not work**. Serve the folder with the included dev server instead. It uses only the Python standard library and works with no internet connection:
 
 ```bash
-python3 -m http.server 8000
-# then open http://localhost:8000
+python3 serve.py          # then open http://localhost:8000
+python3 serve.py 8080     # another port; add --lan to reach it from other devices
 ```
+
+`serve.py` is `python3 -m http.server` with caching turned off (`Cache-Control: no-store`). Plain `http.server` sends no cache headers, so browsers can keep using an old copy of a module after it changes. A new `game.js` then imports something the stale module doesn't have, the script fails, and Play does nothing. Any static server still works, but after code changes you'd have to empty the browser cache.
 
 ### Running tests
 ```bash
@@ -129,9 +136,16 @@ Spawn rules:
 
 ### 3.6 Collision & the chaser
 - Collisions are box-vs-box (AABB) tests using simple hitboxes, not mesh geometry. The player's hitbox gets shorter while sliding.
-- **Head-on hit** (running into an obstacle): the agent catches you and the run ends immediately.
-- **Side clip** (bumping an obstacle while changing lanes): you **stumble**. You get bounced back to your previous lane and the agent closes in. A second stumble within about 8 s means you get caught.
+- **Head-on hit** (running into an obstacle): the agent catches you and the run ends.
+- **Side clip** (bumping an obstacle while changing lanes): you **stumble**. You get bounced back to your previous lane and the agent closes in. A second stumble within 8 s means you get caught.
 - The agent is shown running behind the player. Normally he stays slightly off-screen or far back. After a stumble he is close and visible, then slowly drops back.
+
+Exact rules (ADR-0011):
+- **Classification:** a hit is a side clip if you are mid lane change and the obstacle is *not* in the lane you last stood in. Anything else is head-on, including an obstacle in the lane you're leaving (dodging too late).
+- **Bounce:** you head back to the last lane you stood in (not a lane you only started toward), and queued moves are dropped. Lane input is ignored until you get there; jump and slide still work. The clipped obstacle can't hit you again while you bounce off it (after that it's solid again).
+- **Chaser gap:** normally 12 units back, behind the camera, so off-screen. On a stumble he lunges in at 30 units/s to 3.8 units, just below the Hacker on screen. He then eases back, reaching 12 exactly when the 8 s window ends, so his distance shows how long you're still in danger.
+- **Catch beat:** a head-on hit or a second stumble freezes the world for 0.6 s while the agent closes in and grabs (input and pause ignored), then the game-over screen appears.
+- **The agent runs your path:** he follows the exact line you ran a moment ago (your recorded lane position, height, and slides, delayed by gap ÷ speed), so he jumps, slides, and dodges what you did and never runs through an obstacle.
 
 ### 3.7 Scoring
 - Score = distance traveled, multiplied by a slowly rising multiplier.
@@ -185,11 +199,12 @@ While paused, the game loop keeps rendering but stops simulating. The paused fra
 **Runner: "the Hacker"**
 - All black: hoodie with the hood up, black pants, black shoes. A small glowing visor or screen glow on the face is the only bright accent, so he stays readable against the dark scene.
 - Built from primitives (capsules/boxes) as a `THREE.Group` with separate limb pivots.
+- The camera sees his back, so his glowing accents are a visor that peeks out past the hood and a backpack LED strip. A dim cold light follows him so his outline stays readable (ADR-0012).
 - Animations done in code: run cycle (swing limbs with a sine wave), jump pose, slide pose (body tilted back, low), stumble.
 
 **Chaser: "the Agent"**
 - Black suit, white shirt, thin black tie, sunglasses, short hair.
-- Same rig approach as the Hacker, with a stiffer, more mechanical run cycle.
+- Same rig approach as the Hacker, with a stiffer, more mechanical run cycle (upright, piston arms locked at 90°). Drawn 5% bigger than the Hacker.
 
 ---
 
@@ -287,7 +302,9 @@ Each phase is roughly one prompt or session. Every phase ends with something you
 ### Phase 4: Characters & chaser
 - Procedural Hacker and Agent rigs with run, jump, slide, and stumble animations.
 - Side-clip stumble mechanic. The Agent closes in and catches you on a second stumble.
-- **Acceptance:** Characters replace the boxes. Stumbling visibly brings the Agent closer.
+- **Acceptance:** *(verified 2026-11-18 in headless Chrome; see the Phase 4 handoff)*
+  - [x] Characters replace the boxes (Hacker and Agent rigs with run, jump, slide, and stumble/caught animations)
+  - [x] Stumbling visibly brings the Agent closer (gap 12 → 3.8 on screen; a second stumble within 8 s, or a head-on hit, plays the catch beat and ends the run)
 
 ### Phase 5: Wasteland environment
 - Ruined buildings, flickering broken screens, sagging wires overhead, abandoned hover-cars as set dressing.

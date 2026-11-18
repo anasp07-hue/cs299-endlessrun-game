@@ -85,7 +85,7 @@ Animate in code with sine waves on the pivots. The run-cycle frequency should sc
 Quiet, cold terminal style. Dark blue-black translucent panels (`rgba(9,13,18,0.8)`), hairline `glowBlue` borders at low opacity, `glowPale` headings, `glowBlue` for primary actions and numbers, and only a faint text glow. Slow, subtle animation (breathe, not pulse). Use a **system monospace font stack** only (no web fonts, since the game is offline). Panels need to stay readable on top of the busy 3D scene.
 
 ## Checking your work
-Serve the game (`python3 -m http.server 8000`), take screenshots at start speed and at max speed, and ask:
+Serve the game (`python3 serve.py`), take screenshots at start speed and at max speed, and ask:
 1. Can you tell LOW / HIGH / BLOCK apart in under half a second?
 2. Does the Hacker stay readable against the dark background?
 3. Does it look like a *dead futuristic city*: ruined, dusty, with a few lights still clinging on?

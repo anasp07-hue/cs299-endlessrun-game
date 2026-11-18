@@ -9,9 +9,11 @@ An offline 3D endless runner for the browser (three.js + plain HTML/CSS/JS, no b
 ## Running & testing
 
 ```bash
-python3 -m http.server 8000   # play at http://localhost:8000 (file:// will NOT work)
+python3 serve.py              # play at http://localhost:8000 (file:// will NOT work)
 node --test 'tests/*.test.js' # run the logic tests
 ```
+
+`serve.py` is `http.server` with caching turned off. Plain `python3 -m http.server` lets browsers keep stale modules after a change, and then Play silently does nothing (fix: empty the browser cache).
 
 Node is a **dev-only tool** for running tests. The game itself never needs Node, npm, or any network access (see ADR-0002).
 
