@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Neon Wasteland</title>
+  <title>Apocalypse Run</title>
   <link rel="icon" href="data:,"><!-- no favicon file: avoids a 404 in the console -->
   <link rel="stylesheet" href="style.css">
 </head>
@@ -11,15 +11,63 @@
   <!-- three.js renderer canvas is appended here by game.js -->
   <div id="game-container"></div>
 
-  <!-- UI overlays (SPEC §4). Empty until Phase 3; shown/hidden by game.js. -->
+  <!-- UI overlays (SPEC §4). game.js shows exactly one screen per state. -->
   <div id="ui">
-    <div id="hud" class="overlay">
-      <!-- Phase 2 temporary readout; Phase 3 replaces it with the real HUD -->
-      <div id="dev-readout"></div>
+    <!-- HUD: shown while PLAYING (and dimmed behind PAUSED) -->
+    <div id="hud" class="overlay" hidden>
+      <div class="hud-stat hud-left">
+        <span class="hud-label">SCORE</span>
+        <span id="hud-score" class="hud-value"></span>
+      </div>
+      <div class="hud-stat hud-right">
+        <span class="hud-label">BEST</span>
+        <span id="hud-best" class="hud-value"></span>
+      </div>
+      <button id="btn-pause" class="hud-pause" type="button" aria-label="Pause (Esc or P)" title="Pause (Esc / P)">
+        <span class="pause-bar"></span><span class="pause-bar"></span>
+      </button>
     </div>
-    <div id="menu" class="overlay" hidden></div>
-    <div id="pause" class="overlay" hidden></div>
-    <div id="gameover" class="overlay" hidden></div>
+
+    <!-- Main menu -->
+    <div id="menu" class="overlay screen">
+      <div class="panel">
+        <h1 class="title">APOCALYPSE<span class="title-accent">RUN</span></h1>
+        <p class="tagline">The city is dead. The Agent is not. Run.</p>
+        <button id="btn-play" class="btn btn-primary" type="button">PLAY</button>
+        <p class="stat-line">HIGH SCORE <span id="menu-best" class="stat-value">0</span></p>
+        <dl class="controls">
+          <dt>← → / A D</dt><dd>change lane</dd>
+          <dt>↑ / W / Space</dt><dd>jump</dd>
+          <dt>↓ / S</dt><dd>slide (fast-fall in the air)</dd>
+          <dt>Esc / P</dt><dd>pause</dd>
+        </dl>
+        <p class="hint">Press <kbd>Enter</kbd> or <kbd>Space</kbd> to play</p>
+      </div>
+    </div>
+
+    <!-- Pause -->
+    <div id="pause" class="overlay screen dim" hidden>
+      <div class="panel">
+        <h2 class="heading">PAUSED</h2>
+        <button id="btn-resume" class="btn btn-primary" type="button">RESUME</button>
+        <button id="btn-restart" class="btn" type="button">RESTART</button>
+        <button id="btn-pause-menu" class="btn" type="button">MAIN MENU</button>
+        <p class="hint"><kbd>Esc</kbd> / <kbd>P</kbd> to resume</p>
+      </div>
+    </div>
+
+    <!-- Game over -->
+    <div id="gameover" class="overlay screen dim" hidden>
+      <div class="panel">
+        <h2 class="heading heading-danger">CAUGHT</h2>
+        <p id="new-high" class="badge" hidden>NEW HIGH SCORE!</p>
+        <p class="stat-line">SCORE <span id="final-score" class="stat-value stat-big">0</span></p>
+        <p class="stat-line">HIGH SCORE <span id="final-best" class="stat-value">0</span></p>
+        <button id="btn-again" class="btn btn-primary" type="button">PLAY AGAIN</button>
+        <button id="btn-over-menu" class="btn" type="button">MAIN MENU</button>
+        <p class="hint"><kbd>Enter</kbd> / <kbd>Space</kbd> to play again</p>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="game.js"></script>

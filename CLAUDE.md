@@ -1,4 +1,4 @@
-# CLAUDE.md — Neon Wasteland Endless Runner
+# CLAUDE.md — Apocalypse Run (endless runner)
 
 An offline 3D endless runner for the browser (three.js + plain HTML/CSS/JS, no build step).
 

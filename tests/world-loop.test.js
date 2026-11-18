@@ -183,6 +183,16 @@ test('keys map to the SPEC §3.3 actions', () => {
   assert.equal(actionForKey('KeyS'), ACTION.SLIDE);
 });
 
+test('Esc / P pause and Enter confirms (SPEC §3.3, §4; added in Phase 3)', () => {
+  assert.equal(actionForKey('Escape'), ACTION.PAUSE);
+  assert.equal(actionForKey('KeyP'), ACTION.PAUSE);
+  assert.equal(actionForKey('Enter'), ACTION.CONFIRM);
+  assert.equal(actionForKey('NumpadEnter'), ACTION.CONFIRM);
+  // Cmd/Ctrl+P is the browser's print shortcut: leave it alone.
+  assert.equal(actionForKeyEvent({ code: 'KeyP', metaKey: true }), null);
+  assert.equal(actionForKeyEvent({ code: 'KeyP', ctrlKey: true }), null);
+});
+
 test('Ctrl / Cmd / Alt + game key is left to the browser; Shift is allowed', () => {
   for (const mod of ['ctrlKey', 'metaKey', 'altKey']) {
     for (const code of ['ArrowLeft', 'KeyD', 'KeyS', 'Space']) {
@@ -195,7 +205,8 @@ test('Ctrl / Cmd / Alt + game key is left to the browser; Shift is allowed', () 
 });
 
 test('non-game keys map to null (including prototype names)', () => {
-  for (const code of ['KeyQ', 'Enter', 'Escape', '', 'toString', '__proto__', undefined]) {
+  // Enter and Escape left this list in Phase 3: they are now CONFIRM and PAUSE.
+  for (const code of ['KeyQ', 'Tab', 'Backspace', '', 'toString', '__proto__', undefined]) {
     assert.equal(actionForKey(code), null, `code ${code}`);
   }
 });

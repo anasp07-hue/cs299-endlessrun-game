@@ -34,6 +34,10 @@ export const CONFIG = Object.freeze({
   SCORE_MULT_DISTANCE: 500, // multiplier steps up every this many units
   SCORE_MULT_STEP: 0.1, // ...by this much (1.0, 1.1, 1.2, …)
 
+  // --- Game states & UI (SPEC §4) ---
+  GAMEOVER_INPUT_DELAY: 0.6, // seconds before Enter/Space can restart, so a mashed jump can't skip the game-over screen
+  HUD_DIGITS: 9, // digit slots in the HUD score readouts (999,999,999 max)
+
   // --- Spawning & fairness (SPEC §3.4, ADR-0006) ---
   SPAWN_AHEAD: 160, // rows appear beyond the camera far plane, so they never pop into view
   DESPAWN_Z: 12, // obstacles are recycled once behind the camera

@@ -1,4 +1,4 @@
-# SPEC — Neon Wasteland Endless Runner
+# SPEC — Apocalypse Run (endless runner)
 
 A lightweight 3D endless runner that runs fully offline in the browser. Built with **three.js** for 3D and plain **HTML / CSS / JavaScript** for everything else. No build step, no frameworks, no network access at runtime.
 
@@ -42,7 +42,11 @@ endless-runner/
 │   │   ├── input.js    # Key → action mapping
 │   │   ├── difficulty.js # Speed curve, difficulty, score multiplier
 │   │   ├── collision.js # AABB boxes, player/obstacle hitboxes
-│   │   └── spawner.js  # Pattern table, fair row spacing, obstacle pool (ADR-0006)
+│   │   ├── spawner.js  # Pattern table, fair row spacing, obstacle pool (ADR-0006)
+│   │   ├── run.js      # One run's state, its full reset, and the fixed step (ADR-0008)
+│   │   ├── state.js    # MENU/PLAYING/PAUSED/GAMEOVER transitions, key → command per state
+│   │   ├── highscore.js # High-score parsing and load/save through an injected storage
+│   │   └── hud.js      # Allocation-free digit writer for the HUD
 │   └── palette.js      # Color palette (mirrored as CSS vars in style.css)
 ├── tests/              # node --test 'tests/*.test.js'  (Node built-in runner, dev-only — see ADR-0002, ADR-0004)
 ├── docs/
@@ -145,26 +149,26 @@ Spawn rules:
                   └──Menu──▶ MENU
 ```
 
-All UI is HTML/CSS layered on top of the canvas (not drawn in three.js). It uses a neon-on-dark cyberpunk style that matches the theme.
+All UI is HTML/CSS layered on top of the canvas (not drawn in three.js). It uses a quiet, cold terminal style (blue-black panels, soft blue and pale moonlight text, faint glows) that matches the theme.
 
 | Screen | Contents |
 |---|---|
-| **Main menu** | Title, **Play** button, current high score, controls cheat-sheet, mute toggle |
-| **HUD** (while playing) | Score (top-left), high score (top-right), pause button |
-| **Pause** | Dimmed overlay, **Resume**, **Restart**, **Main Menu**. The game also auto-pauses when the tab loses focus. |
-| **Game over** | "CAUGHT" heading, final score, high score, a "NEW HIGH SCORE!" badge when earned, **Play Again** (also `Enter`/`Space`), **Main Menu** |
+| **Main menu** | Title, **Play** button (also `Enter`/`Space`), current high score, controls cheat-sheet, mute toggle *(the mute toggle arrives with audio in Phase 7; ADR-0008)* |
+| **HUD** (while playing) | Score (top-left), high score (top-right; tracks the live score once you beat it), pause button |
+| **Pause** | Dimmed overlay, **Resume** (also `Esc`/`P`/`Enter`), **Restart**, **Main Menu**. The game also auto-pauses when the tab or window loses focus, but only mid-run. |
+| **Game over** | "CAUGHT" heading, final score, high score, a "NEW HIGH SCORE!" badge when earned, **Play Again** (also `Enter`/`Space`, after a 0.6 s delay so a mashed jump can't skip the screen), **Main Menu** |
 
-While paused, the game loop keeps rendering but stops simulating, and delta-time is reset on resume so nothing jumps.
+While paused, the game loop keeps rendering but stops simulating. The paused frame is frozen exactly, and leftover step time is dropped on resume, so nothing jumps. The key that starts or restarts a run never also counts as a jump. Every Play / Play Again / Restart / Main Menu runs one full `resetRun()` (ADR-0008).
 
 ### High score persistence
-- Stored in `localStorage` under the key `neonWasteland.highScore`.
+- Stored in `localStorage` under the key `neonWasteland.highScore`, as a whole number. Saved only when strictly beaten. Missing or garbage values read as 0.
 - Every `localStorage` read/write is wrapped in `try/catch`. If storage is unavailable (private mode), the game still works and just doesn't keep the score.
 
 ---
 
 ## 5. Art Direction: Futuristic City, Now a Wasteland
 
-**Mood:** a dead neon metropolis. The sky is a dark orange-brown haze. Fog hides the distance. A few screens still flicker in cyan and magenta. Dust drifts through the air.
+**Mood:** a dead city at night, cold and eerie rather than neon-heavy (ADR-0009). The sky is a blue-black haze under pale moonlight. Fog hides the distance. A few screens still give off a soft, cold blue glow, with the odd faint violet glitch. Dust drifts through the air. Only the obstacle cues (amber / white / red) are bright and warm, so they stand out.
 
 | Element | Description | Technique (lightweight) |
 |---|---|---|
@@ -174,7 +178,7 @@ While paused, the game loop keeps rendering but stops simulating, and delta-time
 | **Hanging wires** | Cables sagging between buildings and over the road | `TubeGeometry` along a curve; some become "slide under" obstacles |
 | **Abandoned cars** | Futuristic hover-cars on the ground, shattered, some tipped over | Low-poly box/wedge compositions with a dim emissive strip |
 | **Atmosphere** | Fog, floating dust, occasional sparks from wires | `scene.fog`, one `Points` particle system |
-| **Lighting** | Dim ambient + a hazy directional "sun" + a few colored accent lights | At most 1 shadow-casting light (or none). Use emissive materials instead of many real lights. |
+| **Lighting** | Dim cool ambient + a pale directional "moon" + a few dim, cool accent lights | At most 1 shadow-casting light (or none). Use emissive materials instead of many real lights. |
 
 ### Characters
 
@@ -265,7 +269,7 @@ Each phase is roughly one prompt or session. Every phase ends with something you
 
 ### Phase 2: Obstacles, collision, difficulty
 - Placeholder low/high/block obstacles (color-coded boxes), pattern spawner with pooling.
-- AABB collision with slide-aware hitbox. Head-on hit = game over (temporary: console log + freeze). Until Phase 4 adds the stumble, side clips also end the run.
+- AABB collision with slide-aware hitbox. Head-on hit = game over (Phase 2: console log + freeze; Phase 3: the game-over screen). Until Phase 4 adds the stumble, side clips also end the run.
 - Speed ramp, distance score.
 - **Acceptance:** *(verified 2026-11-17; see the Phase 2 handoff)*
   - [x] You can play a full run (until caught; refresh to restart until Phase 3)
@@ -275,7 +279,10 @@ Each phase is roughly one prompt or session. Every phase ends with something you
 ### Phase 3: Game states, GUI, high score
 - Menu, HUD, pause (including auto-pause on blur), game over with Play Again. Full reset logic.
 - `localStorage` high score with "NEW HIGH SCORE!" badge.
-- **Acceptance:** Menu → play → pause/resume → die → play again loop works with no page reload. High score survives a refresh.
+- The menu's mute toggle is deferred to Phase 7, when there is audio to mute (ADR-0008).
+- **Acceptance:** *(verified 2026-11-17 in Chrome; see the Phase 3 handoff)*
+  - [x] Menu → play → pause/resume → die → play again loop works with no page reload
+  - [x] High score survives a refresh
 
 ### Phase 4: Characters & chaser
 - Procedural Hacker and Agent rigs with run, jump, slide, and stumble animations.
@@ -305,7 +312,7 @@ Each phase is roughly one prompt or session. Every phase ends with something you
 ---
 
 ## 10. Open Questions (decide as we go)
-1. **Game title:** "Neon Wasteland" is a working name.
+1. **Game title:** ~~"Neon Wasteland" is a working name.~~ **Resolved: "Apocalypse Run"** (ADR-0010). The `localStorage` keys keep the old `neonWasteland.` prefix so saved high scores aren't lost.
 2. **Split `game.js` into modules** once it gets big, or keep a single file? *(Partly answered: logic is modular from the start, per ADR-0001. View code still to be decided.)*
 3. **Audio:** generated in code (zero files) vs. CC0 sound files?
 4. **Collectibles:** include data shards in v1, or keep pure distance scoring?

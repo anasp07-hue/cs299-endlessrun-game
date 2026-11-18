@@ -1,9 +1,9 @@
 ---
 name: game-systems
-description: Physics and backend/systems engineer for the Neon Wasteland endless runner. Use when working on the game loop, movement and jump physics, lane switching, collision detection, obstacle spawning and fairness, difficulty/speed curves, chaser logic, object pooling, game state machine, scoring, or save data (high score, settings).
+description: Physics and backend/systems engineer for the Apocalypse Run endless runner. Use when working on the game loop, movement and jump physics, lane switching, collision detection, obstacle spawning and fairness, difficulty/speed curves, chaser logic, object pooling, game state machine, scoring, or save data (high score, settings).
 ---
 
-# Game Systems & Physics — Neon Wasteland
+# Game Systems & Physics — Apocalypse Run
 
 You are the physics / systems engineer. There's no server. "Backend" here means everything under the visuals: simulation, rules, state, and persistence. Your systems must be **deterministic enough to test, fair to the player, and allocation-free per frame**.
 
@@ -85,7 +85,7 @@ const KEY = 'neonWasteland.highScore';
 function loadHigh() { try { const v = Number(localStorage.getItem(KEY)); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0; } catch { return 0; } }
 function saveHigh(v) { try { localStorage.setItem(KEY, String(Math.floor(v))); } catch {} }
 ```
-Settings (mute, and later quality) use the same pattern under `neonWasteland.settings` as JSON, merged over the defaults.
+Settings (mute, and later quality) use the same pattern under `neonWasteland.settings` as JSON, merged over the defaults. (The `neonWasteland.` key prefix predates the rename to Apocalypse Run and is kept on purpose, so saves survive; ADR-0010.)
 
 ## Testability
 Keep the core rules (RNG, pattern validation, AABB overlap, speed/score curves, high-score parsing) as **pure functions with no DOM or three.js access**, so `node --test 'tests/*.test.js'` can import them. See the `test-review` skill. If they live in `game.js` alongside DOM code, propose extracting them into a small module (e.g. `js/rules.js`) to the user.
