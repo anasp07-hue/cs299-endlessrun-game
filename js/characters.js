@@ -110,11 +110,11 @@ function dressLimbs(sk, m) {
  */
 export function createHacker() {
   const sk = createSkeleton();
-  const hoodie = new THREE.MeshLambertMaterial({ color: '#1b1d23' });
+  const hoodie = new THREE.MeshLambertMaterial({ color: '#272a32' }); // charcoal-black: reads as black, keeps a shape
   const m = {
     armW: 0.13,
     sleeve: hoodie,
-    pants: new THREE.MeshLambertMaterial({ color: '#131418' }),
+    pants: new THREE.MeshLambertMaterial({ color: '#1c1e23' }),
     shoe: new THREE.MeshLambertMaterial({ color: '#1d2026' }),
     hand: null, // sleeves pulled over the hands
   };

@@ -47,11 +47,13 @@ endless-runner/
 │   │   ├── chaser.js   # Hit classification, stumble window, chaser gap, catch beat (ADR-0011)
 │   │   ├── trail.js    # Ring buffer of the player's recent path, which the Agent follows (ADR-0011)
 │   │   ├── pose.js     # Rig dimensions + character poses as plain joint angles (ADR-0012)
+│   │   ├── scenery.js  # City chunk recycling + deterministic layout, sky colour (ADR-0013)
 │   │   ├── run.js      # One run's state, its full reset, and the fixed step (ADR-0008)
 │   │   ├── state.js    # MENU/PLAYING/PAUSED/GAMEOVER transitions, key → command per state
 │   │   ├── highscore.js # High-score parsing and load/save through an injected storage
 │   │   └── hud.js      # Allocation-free digit writer for the HUD
 │   ├── characters.js   # View: Hacker and Agent THREE.Group rigs, applyPose (ADR-0012)
+│   ├── city.js         # View: sky dome + fog, ruined buildings, screens, cables, wrecks, dust, road texture (ADR-0013)
 │   └── palette.js      # Color palette (mirrored as CSS vars in style.css)
 ├── tests/              # node --test 'tests/*.test.js'  (Node built-in runner, dev-only — see ADR-0002, ADR-0004)
 ├── docs/
@@ -191,8 +193,8 @@ While paused, the game loop keeps rendering but stops simulating. The paused fra
 | **Giant screens** | Broken billboards on buildings, some dead, some flickering glitch art | Planes with emissive `CanvasTexture`, redrawn a few times per second |
 | **Hanging wires** | Cables sagging between buildings and over the road | `TubeGeometry` along a curve; some become "slide under" obstacles |
 | **Abandoned cars** | Futuristic hover-cars on the ground, shattered, some tipped over | Low-poly box/wedge compositions with a dim emissive strip |
-| **Atmosphere** | Fog, floating dust, occasional sparks from wires | `scene.fog`, one `Points` particle system |
-| **Lighting** | Dim cool ambient + a pale directional "moon" + a few dim, cool accent lights | At most 1 shadow-casting light (or none). Use emissive materials instead of many real lights. |
+| **Atmosphere** | Fog, floating dust, occasional sparks from wires | `scene.fog` plus a sky-gradient dome; city materials fog toward the sky colour so ruins dissolve into it (ADR-0013). One `Points` particle system. Sparks come in Phase 7. |
+| **Lighting** | Dim cool ambient + a pale directional "moon" + a few dim, cool accent lights; streetlights along the sidewalks (some dead, some flickering) | At most 1 shadow-casting light (or none). Use emissive materials instead of many real lights. Streetlights are emissive heads, painted light pools, and faint cones; only 2 real lights are handed between the lamps nearest the player (ADR-0013). |
 
 ### Characters
 
@@ -309,7 +311,9 @@ Each phase is roughly one prompt or session. Every phase ends with something you
 ### Phase 5: Wasteland environment
 - Ruined buildings, flickering broken screens, sagging wires overhead, abandoned hover-cars as set dressing.
 - Fog, haze sky color, dust particles, lighting pass.
-- **Acceptance:** The scene reads clearly as "dead futuristic city" and stays at 60 fps.
+- **Acceptance:** *(verified 2026-11-18 in headless Chrome on the Apple M3 Pro GPU; see the Phase 5 handoff)*
+  - [x] The scene reads clearly as "dead futuristic city": ruined buildings with dark windows (a few faintly lit), broken roof slabs, flickering/glitching/dead screens, cables sagging overhead, rusted hover-car wrecks, concrete barriers, crates, and rubble heaps filling the shoulders and sidewalks (never the lanes), streetlights (some dead or flickering) casting pools of light, a cracked road with sidewalks, fog fading into a haze sky, drifting dust
+  - [x] Stays at 60 fps: ~60.3 fps at max speed, 91 draw calls (budget 150), ~8.5k triangles
 
 ### Phase 6: Themed obstacles
 - Replace placeholder obstacles: low → fallen screens/barriers; high → hanging sparking wires/beams; block → wrecked hover-cars/pillars.

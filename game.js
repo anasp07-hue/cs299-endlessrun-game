@@ -1,4 +1,7 @@
 // Apocalypse Run — browser entry point.
+// Phase 5: the dead city around the road (js/city.js, layout in
+// js/logic/scenery.js, ADR-0013): sky gradient + matching fog, ruined
+// buildings, broken screens, cables, wrecks, rubble, dust.
 // Phase 4: the procedural Hacker and Agent rigs (js/characters.js, poses in
 // js/logic/pose.js, ADR-0012) and the side-clip stumble: bounce back, the
 // Agent closes in, a second stumble or a head-on hit plays a short catch beat
@@ -15,7 +18,6 @@ import { clampDt } from './js/logic/time.js';
 import { createFixedStepper } from './js/logic/loop.js';
 import { lerp, damp, easeOutQuad } from './js/logic/math.js';
 import { segmentZ, laneX } from './js/logic/world.js';
-import { createRng } from './js/logic/rng.js';
 import { actionForKeyEvent } from './js/logic/input.js';
 import { queueLaneMove, requestJump, requestSlide, jumpVelocity } from './js/logic/player.js';
 import { difficultyAt } from './js/logic/difficulty.js';
@@ -29,6 +31,7 @@ import {
   agentRun, agentAir, agentSlide, agentReach, hitWeight, hitOverlay,
 } from './js/logic/pose.js';
 import { createHacker, createAgent, applyPose } from './js/characters.js';
+import { createCity, makeRoadTexture } from './js/city.js';
 import {
   STATE, CMD, nextState, startsNewRun, commandFor, shouldAutoPause, canRestart, abandonsRun,
 } from './js/logic/state.js';
@@ -48,8 +51,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 container.appendChild(renderer.domElement);
 
 // --- Scene & camera ---------------------------------------------------------
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(PALETTE.skyHaze);
+const scene = new THREE.Scene(); // background + fog are set by the city (sky colour, ADR-0013)
 
 const camera = new THREE.PerspectiveCamera(
   CONFIG.CAMERA_FOV,
@@ -73,50 +75,14 @@ const runnerLight = new THREE.PointLight(
 runnerLight.position.set(0, 2.6, 2.4);
 scene.add(runnerLight);
 
+// --- The dead city: sky, fog, recycled ruins, screens, cables, wrecks, dust ---
+const city = createCity(scene, renderer, CONFIG);
+let cityTime = 0; // view clock for flicker / glitch / dust: frozen only while paused
+
 // --- Ground: recycled road segments (one shared geometry/material/texture) ---
-function makeRoadTexture() {
-  const W = 256;
-  const H = 512; // canvas spans one segment: GROUND_WIDTH × GROUND_SEGMENT_LENGTH
-  const canvas = document.createElement('canvas');
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = PALETTE.asphalt;
-  ctx.fillRect(0, 0, W, H);
-
-  // Speckle so the scroll is visible (seeded, so it looks the same every load).
-  const rng = createRng(1337);
-  for (let i = 0; i < 1400; i++) {
-    const v = 22 + rng.int(26);
-    ctx.fillStyle = `rgb(${v},${v},${v + 2})`;
-    ctx.fillRect(rng.int(W), rng.int(H), 1 + rng.int(3), 1 + rng.int(3));
-  }
-
-  const unitsToPx = W / CONFIG.GROUND_WIDTH;
-  const xPx = (x) => W / 2 + x * unitsToPx;
-  const half = CONFIG.LANE_WIDTH / 2;
-  const lx = (i) => laneX(i, CONFIG.LANE_WIDTH, CONFIG.LANE_COUNT);
-
-  ctx.fillStyle = PALETTE.laneLine;
-  // Solid road edges: half a lane outside the outer lanes
-  ctx.fillRect(xPx(lx(0) - half) - 2, 0, 4, H);
-  ctx.fillRect(xPx(lx(CONFIG.LANE_COUNT - 1) + half) - 2, 0, 4, H);
-  // Dashed dividers between neighbouring lanes: 4 dashes per segment (seamless tile)
-  const dash = H / 4;
-  for (let i = 0; i < CONFIG.LANE_COUNT - 1; i++) {
-    const x = xPx(lx(i) + half);
-    for (let y = 0; y < H; y += dash) ctx.fillRect(x - 2, y + dash * 0.25, 4, dash * 0.5);
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-  return tex;
-}
-
 const roadGeo = new THREE.PlaneGeometry(CONFIG.GROUND_WIDTH, CONFIG.GROUND_SEGMENT_LENGTH);
 roadGeo.rotateX(-Math.PI / 2);
-const roadMat = new THREE.MeshLambertMaterial({ map: makeRoadTexture() });
+const roadMat = new THREE.MeshLambertMaterial({ map: makeRoadTexture(renderer, CONFIG) });
 const roadSegments = [];
 for (let i = 0; i < CONFIG.GROUND_SEGMENT_COUNT; i++) {
   const seg = new THREE.Mesh(roadGeo, roadMat);
@@ -527,6 +493,10 @@ function render(alpha, dt) {
   camera.position.x = cameraX;
   camera.lookAt(cameraX, CONFIG.CAMERA_LOOK_Y, CONFIG.CAMERA_LOOK_Z);
 
+  // City: chunks from the same interpolated scroll as the road and obstacles.
+  if (state !== STATE.PAUSED) cityTime += dt;
+  city.update(s, cityTime, camera);
+
   renderer.render(scene, camera);
 }
 
@@ -555,7 +525,7 @@ renderer.setAnimationLoop(loop);
 // --- Debug (dev only): ?debug exposes internals for smoke tests -------------
 if (DEBUG) {
   window.__neon = {
-    THREE, renderer, scene, camera, run, hacker, agent, roadSegments, debug, CMD, STATE,
+    THREE, renderer, scene, camera, run, hacker, agent, roadSegments, city, debug, CMD, STATE,
     getState: () => state,
     dispatch,
     getHighScore: () => highScore,

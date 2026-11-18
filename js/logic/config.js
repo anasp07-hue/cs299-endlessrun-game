@@ -21,9 +21,9 @@ export const CONFIG = Object.freeze({
   CAMERA_FOLLOW_RATE: 10, // exponential smoothing rate (1/s)
 
   // --- Lighting ---
-  HEMI_INTENSITY: 1.4,
-  SUN_INTENSITY: 1.6,
-  RUNNER_LIGHT_INTENSITY: 14, // soft cold light behind/above the Hacker so his dark outfit keeps a silhouette
+  HEMI_INTENSITY: 1.9,
+  SUN_INTENSITY: 2.0,
+  RUNNER_LIGHT_INTENSITY: 22, // soft cold light behind/above the Hacker so his dark outfit keeps a silhouette
   RUNNER_LIGHT_RANGE: 7, // units: it only lights the runner, the Agent when close, and a pool of road
 
   // --- Speed & difficulty (SPEC §3.5) ---
@@ -106,10 +106,112 @@ export const CONFIG = Object.freeze({
   AGENT_AIR_Y: 0.02, // the Agent switches to his jump pose when his path is this high off the road
   CATCH_REACH_AT: 0.6, // fraction of the catch beat by which the Agent's arms are fully out
 
+  // --- Ruined city: set dressing, sky, fog, dust (SPEC §5, Phase 5, ADR-0013) ---
+  CITY_SEED: 20261118, // the same street every run: chunk content depends only on (seed, chunk index)
+  CITY_CHUNK_LENGTH: 40,
+  CITY_CHUNK_COUNT: 5, // 200 units: from CITY_BACK behind the player to ≥ 140 ahead (fully fogged by then)
+  CITY_BACK: 20, // a chunk is recycled once it is this far behind the player (camera is at 6.5)
+  BUILDING_SETBACK_MIN: 9.5, // |x| of a building's road-facing wall (sidewalk in front of it)
+  BUILDING_SETBACK_MAX: 13,
+  BUILDING_WIDTH_MIN: 8, // x extent
+  BUILDING_WIDTH_MAX: 16,
+  BUILDING_DEPTH_MIN: 7, // z extent
+  BUILDING_DEPTH_MAX: 16,
+  BUILDING_HEIGHT_MIN: 9,
+  BUILDING_HEIGHT_MAX: 44,
+  BUILDING_ALLEY_CHANCE: 0.25,
+  BUILDING_ALLEY_MIN: 2,
+  BUILDING_ALLEY_MAX: 5,
+  BUILDING_BROKEN_CHANCE: 0.45, // tilted slab left on the roof
+  RUBBLE_CHANCE: 0.4,
+  RUBBLE_SIZE_MIN: 0.4,
+  RUBBLE_SIZE_MAX: 1.3,
+  RUBBLE_SPREAD: 2.5, // how far from the wall rubble can roll (stays on the sidewalk)
+  SCREEN_CHANCE: 0.3,
+  SCREEN_WIDTH_MIN: 4,
+  SCREEN_WIDTH_MAX: 8,
+  SCREEN_Y_MIN: 4,
+  SCREEN_DEAD_SHARE: 0.3, // dead / flickering / glitching (the rest)
+  SCREEN_FLICKER_SHARE: 0.4,
+  SCREEN_REDRAW_FPS: 6, // shared glitch canvases are redrawn this often (art-direction: 4–8)
+  WIRE_CHANCE: 0.55,
+  WIRE_MIN_Y: 7, // lowest point of any sagging cable: far above a jump (2.2 + 1.8 = 4.0)
+  WIRE_MAX_Y: 12,
+  WIRE_SAG_MIN: 1,
+  WIRE_SAG_MAX: 2.8,
+  WIRE_VARIANTS: 3,
+  WIRE_GLOW_CHANCE: 0.3,
+  WIRE_RADIUS: 0.05,
+  WIRE_SPAN: 14, // cables run from x = −SPAN to +SPAN, into the walls
+  WIRE_ANCHOR_X: 11, // where a cable meets the walls (between BUILDING_SETBACK_MIN and _MAX)
+  WIRE_ROOF_GAP: 1, // anchors stay this far below both roofs
+  CAR_WIDTH: 2.0,
+  CAR_LENGTH: 3.8,
+  CAR_X_MIN: 6.2, // reach (≈2.15) keeps every wreck ≥ 0.25 outside the lanes (3.75)...
+  CAR_X_MAX: 7.3, // ...and off the buildings (9.5)
+  CAR_TIPPED_CHANCE: 0.3,
+  // Clutter on the shoulders (lane edge 3.75 → kerb 7.6) and sidewalks (→ 9.5).
+  // One walk down each side picks items by weight; nothing comes within
+  // PROP_LANE_MARGIN of a lane, and nothing uses the obstacle cue colours.
+  PROP_LANE_MARGIN: 0.25,
+  CHUNK_SEAM_MARGIN: 0.5, // street clutter keeps this far from each chunk end, so neighbours can't overlap
+  STREET_LEVEL_Y: 3, // debris below this is street clutter (above: roof slabs)
+  PROP_EMPTY_W: 0.12, // weights per step: leave a gap...
+  PROP_CAR_W: 0.2, // ...a wreck (≤ MAX_CARS per chunk; never beside a lamp post)
+  PROP_BARRIER_W: 0.22, // ...a run of concrete barriers
+  PROP_HEAP_W: 0.2, // ...a rubble heap
+  PROP_CRATE_W: 0.18, // ...rusted crates
+  PROP_GAP_MIN: 0.4,
+  PROP_GAP_MAX: 1.8,
+  BARRIER_LENGTH: 2.6, // concrete road barrier, laid along the road (a LOW obstacle lies across it)
+  BARRIER_WIDTH: 0.6,
+  BARRIER_HEIGHT: 0.8,
+  BARRIER_X_MIN: 4.9,
+  BARRIER_X_MAX: 6.6,
+  BARRIER_TILT: 0.25, // radians: knocked crooked
+  HEAP_X_MIN: 5.9, // tilted chunks (≤ 0.85 radius) at ±HEAP_SPREAD stay ≥ PROP_LANE_MARGIN off the lanes
+  HEAP_X_MAX: 7.0,
+  HEAP_SPREAD: 0.8,
+  HEAP_SIZE_MIN: 0.35,
+  HEAP_SIZE_MAX: 0.9,
+  CRATE_X_MIN: 5.2,
+  CRATE_X_MAX: 8.5,
+  CRATE_SIZE_MIN: 0.8,
+  CRATE_SIZE_MAX: 1.4,
+  STREETLIGHT_SPACING: 20, // one lamp post every 20 units, alternating sides (divides CITY_CHUNK_LENGTH)
+  STREETLIGHT_X: 8.1, // |x| of the post, on the sidewalk just past the kerb (7.6)
+  STREETLIGHT_HEIGHT: 6.6, // lamp head height: below the lowest cable (7), far above play
+  STREETLIGHT_ARM: 2.3, // the arm reaches this far over the road shoulder
+  STREETLIGHT_CLEARANCE: 1.2, // rubble keeps this far (in z) from a post on its side
+  STREETLIGHT_DEAD_CHANCE: 0.18,
+  STREETLIGHT_FLICKER_CHANCE: 0.14,
+  STREETLIGHT_POOL_RADIUS: 6.5, // soft light pool painted on the road under each lamp
+  STREETLIGHT_POOL_STRENGTH: 0.32, // additive brightness of that pool
+  STREETLIGHT_CONE_STRENGTH: 0.016, // the faint cone of light through the dusty air
+  STREETLIGHT_LIGHTS: 2, // real PointLights, handed between the lamps nearest the player
+  STREETLIGHT_INTENSITY: 70, // candela (physically based lights): ≈ 1.6 at the player's head under a lamp
+  STREETLIGHT_RANGE: 18,
+  STREETLIGHT_FULL_AHEAD: 22, // a real light is at full strength from this far ahead...
+  STREETLIGHT_FADE_AHEAD: 32, // ...fading in from here (window 32 + 8 = 40: never more than 2 lamps)
+  STREETLIGHT_FADE_BEHIND: 8, // ...and fades out by this far behind the player
+  FOG_NEAR: 22,
+  FOG_FAR: 140, // everything new appears ≥ 140 ahead, already fully fogged into the sky
+  SKY_HORIZON_GLOW: 0.3, // horizon/fog colour = skyHaze lifted this far toward skyGlow
+  SKY_ZENITH_DARKEN: 0.5, // top of the sky = skyHaze darkened this much
+  SKY_FADE_START: 0.0, // sin(elevation) where the darkening starts...
+  SKY_FADE_END: 0.38, // ...and where it is complete (the top of the view is ≈ 0.36)
+  DUST_COUNT: 320,
+  DUST_SIZE: 0.08,
+  DUST_AREA_X: 30, // box of drifting dust around the player
+  DUST_AREA_Y: 9,
+  DUST_AREA_Z: 70,
+  DUST_DRIFT: 0.35, // units/s of slow sideways drift
+
   // --- Ground segments (recycled; SPEC §7.2 World) ---
   GROUND_SEGMENT_LENGTH: 20,
   GROUND_SEGMENT_COUNT: 10, // 200 units: far edge always past the camera far plane (no pop-in)
   GROUND_BACK_Z: 15, // a segment wraps to the front once its far edge passes this z (behind camera)
-  GROUND_WIDTH: 10,
+  GROUND_WIDTH: 26, // asphalt to ±7.6 (shoulder for clutter), kerb, sidewalk out to ±13 (the deepest building setback)
+  ROAD_ASPHALT_HALF: 7.6, // where the kerb is drawn on the road texture
   FLOOR_SIZE: 1200, // static floor beyond the road; wide enough for 32:9 windows at CAMERA_FAR
 });
