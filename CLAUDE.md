@@ -64,10 +64,11 @@ Node is a **dev-only tool** for running tests. The game itself never needs Node,
 - `game.js` and the rendering modules import this logic. They don't reimplement it.
 - Logic modules must not touch `window`, `document`, `localStorage`, or `THREE`. Pass values in, get values out. Randomness comes from a seeded RNG that is passed in.
 - Tuning numbers go in one `CONFIG` object (see the `game-systems` skill).
+- **Skins are cosmetic.** Every runner is dressed on the shared skeleton (`RIG`, `createSkeleton()`) and posed by the shared pose functions. Rules modules never import `shop.js` or `characters.js` and never read the equipped character. `tests/round3-characters.test.js` measures every runner against the Hacker's height and width.
 
 ### 6. Decision records
 - Write a decision record for every **significant or hard-to-reverse decision**: architecture, file/module layout, libraries, data formats, storage keys, deviations from SPEC, and answers to the SPEC §10 open questions. Every round needs at least one, for a decision that had real alternatives.
-- From Round 2 on, they go in **`docs/decisions/`**, numbered `0001-…`, `0002-…` (the next one is `0002`). Write them as **Y-statements**: "In the context of …, facing …, we decided for … and neglected …, to achieve …, accepting that …". See `0001-bank-shards-at-checkpoints.md`.
+- From Round 2 on, they go in **`docs/decisions/`**, numbered `0001-…`, `0002-…`, continuing across rounds (check `ls docs/decisions` for the next free number). Write them as **Y-statements**: "In the context of …, facing …, we decided for … and neglected …, to achieve …, accepting that …". See `0001-bank-shards-at-checkpoints.md`.
 - `docs/adr/` (ADR-0001…0016, template `0000-template.md`) is closed to new files but still in force. Never edit an accepted record's decision. Write a new one that supersedes it instead.
 - Small, easy-to-reverse choices (a tweaked constant, a color) don't need an ADR.
 
@@ -95,7 +96,12 @@ Load the matching skill **before** starting work it covers:
 - Runs fully offline: three.js is vendored in `libs/`, with no CDNs, web fonts, or remote assets.
 - No build tools, frameworks, TypeScript, or npm packages in the game.
 - No allocations in per-frame code (object pooling). The game must hold 60 fps.
-- No `localStorage` reads or writes in per-frame code. Saves (`neonWasteland.highScore`, `.settings`, `.shardTotal`) happen only at checkpoints (state changes, tab hidden, `pagehide`). Keep the `neonWasteland.` prefix (ADR-0010).
+- No `localStorage` reads or writes in per-frame code. Saves (`neonWasteland.highScore`, `.settings`, `.shardTotal`) happen only at checkpoints (state changes, tab hidden, `pagehide`, a shop purchase click). Keep the `neonWasteland.` prefix (ADR-0010).
+- Those three are the **only** storage keys. Owned and equipped characters are never saved, in any kind of storage (R10, decision 0002). `tests/round3-wiring.test.js` fails on any other `neonWasteland.<key>`, even in a comment.
 - No network in game code: no `http(s)://` text (even in comments), `fetch`, XHR, or sockets in `game.js`, `js/`, `index.html`, or `style.css`. `tests/round2-wiring.test.js` enforces this.
-- Smoke-test in a throwaway browser profile: `?debug` runs save real high scores and shard totals to `localStorage`.
+- Smoke-test in a throwaway browser profile: `?debug` runs save real high scores and shard totals to `localStorage`. The recipe:
+  - Start `python3 serve.py &`.
+  - Start Chrome headless with `--headless=new --remote-debugging-port=9222 --user-data-dir=<scratchpad>/chrome --autoplay-policy=no-user-gesture-required --use-angle=metal --enable-gpu --ignore-gpu-blocklist --window-size=1280,720 about:blank`.
+  - Drive it with a Node 24 script, which has built-in `fetch` and `WebSocket`: get the page from `127.0.0.1:9222/json/new`, then use `Runtime.evaluate` on `window.__neon` (`?debug&seed=4`), and `Input.dispatchMouseEvent` / `Input.dispatchKeyEvent` for real clicks and keys.
+  - Kill Chrome and `serve.py` afterwards.
 - Every phase leaves the game in a playable state.
