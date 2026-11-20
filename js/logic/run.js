@@ -32,6 +32,7 @@ export function createRun(cfg, seed = 0) {
     nearMissType: 0, // obstacle type of the latest near miss
     nearMissLane: 0,
     shardCount: 0, // data shards collected this run (Phase 8)
+    shardsBanked: 0, // how many of shardCount are already added to the lifetime total (Round 2, shardbank.js)
     shards: createShards(cfg, seed),
     player: createPlayer(cfg),
     chaser: createChaser(cfg),
@@ -60,6 +61,7 @@ export function resetRun(run, cfg, seed) {
   run.nearMissType = 0;
   run.nearMissLane = 0;
   run.shardCount = 0;
+  run.shardsBanked = 0;
   resetShards(run.shards, cfg, seed);
   resetPlayer(run.player, cfg);
   resetChaser(run.chaser, cfg);
