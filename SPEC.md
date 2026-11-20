@@ -253,10 +253,11 @@ The player runs as one of three characters (Round 3, R8). All three are built on
 - Animations done in code: run cycle (swing limbs with a sine wave), jump pose, slide pose (body tilted back, low), stumble.
 
 **Runner: "the Android"** (shop, 100 shards)
-- Brushed silver plating over dark graphite joints: a boxy chest plate, a squared helmet head with a thin glowing eye band, a short antenna, and a back vent with a soft glow strip (what the camera sees). Cold and metallic; the silver keeps him readable against the night.
+- Brushed silver plating over dark graphite joints: a boxy chest plate, shoulder pads, a squared helmet head with a thin glowing eye band, a short antenna, and a back vent with a soft glow strip (what the camera sees). Cold and metallic; the silver keeps him readable against the night.
+- Like the Hacker, neither new runner has separate hand boxes: they would dip into the road in the slide pose.
 
 **Runner: "the Alien"** (shop, 200 shards)
-- Muted green skin, a large domed head (wider than tall, never taller than the Hacker's hood), big black almond eyes, long thin arms and legs in a dark grey-green jumpsuit with a faint green glow line down the back.
+- Muted green skin, a large domed head (wider than tall, never taller than the Hacker's hood), big black slanted eyes, thin green arms and legs, a dark grey-green vest, and a faint green glow line down the back.
 - Green is not an obstacle cue colour and stays desaturated, so the cues (amber / white / red) still own the brightest, warmest colours.
 
 **Chaser: "the Agent"**
@@ -411,11 +412,11 @@ Requirements R7–R10 (§1). Decision records: `docs/decisions/0002-session-only
 - `js/logic/shardbank.js`: `spendShards()`, which re-reads the stored total, refuses if it can't cover the price, and saves the new total.
 - `js/logic/state.js`: a `SHOP` state (`MENU -SHOP-> SHOP`, `SHOP -MENU-> MENU`; `Esc`/`P` go back; `Enter`/`Space` do nothing on their own).
 - `js/characters.js`: `createAndroid()` and `createAlien()` on the same skeleton as the Hacker. `game.js` builds all three runners at startup and shows only the equipped one.
-- **Acceptance:**
-  - [ ] R7: the menu has a Shop button; the shop lists all three characters with their price or status; buying with enough shards spends exactly the price, updates the shown total and equips the character; buying without enough shards does nothing; an owned character can't be bought again; Back / `Esc` returns to the menu
-  - [ ] R8: the Android (silver robot) and Alien (green alien) can be bought, equipped and played; each reads clearly against the night scene at start and max speed
-  - [ ] R9: every character is built on the same rig, stands about 1.8 tall and slides under the 0.8 slide height like the Hacker, and fits the same hitbox; the run simulation never reads the skin; every earlier test still passes; still 60 fps at max speed with each character
-  - [ ] R10: after a reload only the Hacker is owned and equipped, and the shard total still has the spend deducted; no new `localStorage` key exists; the shop writes nothing during play
+- **Acceptance:** *(verified 2026-11-19: `node --test` 299/299; headless Chrome over CDP on `serve.py`, `?debug&seed=4`, 32/32 smoke checks; code review (low): no findings)*
+  - [x] R7: the menu has a Shop button; the shop lists all three characters with their price or status; buying with enough shards spends exactly the price, updates the shown total and equips the character; buying without enough shards does nothing; an owned character can't be bought again; Back / `Esc` returns to the menu *(browser: 150 → Android → 50; locked Alien click did nothing; another tab's 260 picked up on re-entering; Alien → 60; re-equip free; Space in the shop doesn't start a run; Esc and Back return)*
+  - [x] R8: the Android (silver robot) and Alien (green alien) can be bought, equipped and played; each reads clearly against the night scene at start and max speed *(screenshots in the shop, at start speed and at speed 35)*
+  - [x] R9: every character is built on the same rig, stands about 1.8 tall and slides under the 0.8 slide height like the Hacker, and fits the same hitbox; the run simulation never reads the skin; every earlier test still passes; still 60 fps at max speed with each character *(Node: same pivots; top within +0.03/−0.05 of the Hacker, no wider, in 15 poses; browser: lanes, jump, slide, pause, catch, Play Again as the Android; 60.2 fps / 104 draw calls (Android), 60.3 fps / 101 (Alien) at speed 35; 0 storage writes during play; 0 console errors or warnings; every request to localhost)*
+  - [x] R10: after a reload only the Hacker is owned and equipped, and the shard total still has the spend deducted; no new `localStorage` key exists; the shop writes nothing during play *(browser: reload → Hacker only, Android back on sale, total still 60, keys unchanged, high score kept)*
 
 ---
 
