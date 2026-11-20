@@ -31,6 +31,12 @@ IDs added in Round 2 so tests can name the requirement they check. `problem.md` 
 | **R8** | 3 | Two new characters: a silver robot/android (**Android**, 100 shards) and a green alien (**Alien**, 200 shards) | §5 Characters, §9 Round 3 |
 | **R9** | 3 | Every character has the same movement and hitbox as the Hacker, and nothing else breaks | §3.6, §5 Characters, §9 Round 3 |
 | **R10** | 3 | Skins don't save: bought characters (and the equipped one) last only until the page is reloaded or closed. The shards spent on them stay spent (user's answer, 2026-11-19) | §4 Shop, §9 Round 3 |
+| **R11** | 4 | Three power-ups: a **bazooka** that destroys obstacles, **double score**, and **phase** (pass through obstacles) | §3.8, §9 Round 4 |
+| **R12** | 4 | The bazooka has one shot, which destroys the next row of obstacles. The player fires it with a key, **F** (user's answer, 2026-11-19) | §3.3, §3.8, §9 Round 4 |
+| **R13** | 4 | Double score and phase each last 30 seconds. Double score doubles all points (distance and shard points), not the shard count (user's answer, 2026-11-19) | §3.8, §9 Round 4 |
+| **R14** | 4 | Power-ups are picked up off the ground | §3.8, §9 Round 4 |
+| **R15** | 4 | Where power-ups spawn is random, and they're rare: on average about one every 50 s (user's answer: "about every 45–60 s", 2026-11-19) | §3.8, §9 Round 4 |
+| **R16** | 4 | Nothing breaks, and every power-up does what it's supposed to. Different power-ups can be active at once; picking one up again resets its timer to 30 s (user's answer, 2026-11-19) | §3.8, §7.3, §9 Round 4 |
 
 ### Non-goals
 - Multiplayer, accounts, online leaderboards
@@ -71,6 +77,7 @@ endless-runner/
 │   │   ├── shards.js   # Data-shard placement between rows, pickup, pool (ADR-0016)
 │   │   ├── shardbank.js # Lifetime shard total: parsing, load/save, banking a run's shards, spending (Round 2–3, docs/decisions/0001, 0002)
 │   │   ├── shop.js     # Character catalogue, prices, session-only ownership, buy/equip (Round 3, docs/decisions/0002)
+│   │   ├── powerups.js # Power-up pickups (placement, pickup), the bazooka shot, double-score and phase timers (Round 4, docs/decisions/0004)
 │   │   ├── juice.js    # Camera-shake trauma, landing squash, near-miss flash (ADR-0015)
 │   │   ├── particles.js # Pooled spark particles (ADR-0015)
 │   │   └── hud.js      # Allocation-free digit writer for the HUD
@@ -78,6 +85,7 @@ endless-runner/
 │   ├── audio.js        # View: all SFX + a generative music loop, made with Web Audio in code (ADR-0015)
 │   ├── city.js         # View: sky dome + fog, ruined buildings, screens, cables, wrecks, dust, road texture (ADR-0013)
 │   ├── obstacleModels.js # View (DOM-free): themed LOW/HIGH/BLOCK models fitted to their hitboxes (ADR-0014)
+│   ├── powerupModels.js # View (DOM-free): the three power-up pickups and the carried bazooka (Round 4)
 │   ├── geometry.js     # View (DOM-free): shared builders (coloured merges, hover-car, barrier, tubes)
 │   └── palette.js      # Color palette (mirrored as CSS vars in style.css)
 ├── tests/              # node --test 'tests/*.test.js'  (Node built-in runner, dev-only — see ADR-0002, ADR-0004)
@@ -135,6 +143,7 @@ A hacker in black is fleeing through the ruins of a futuristic city. A governmen
 | Move left / right | `←` `→` / `A` `D` | Switch lanes |
 | Jump | `↑` / `W` / `Space` | Parabolic jump (0.7 s airtime, 2.2 apex). No double jump. A jump pressed up to 0.1 s before landing fires on landing. Jumping cancels a slide. |
 | Slide / duck | `↓` / `S` | Lower the hitbox (1.8 → 0.8) for 0.7 s. If pressed in the air, fast-fall (25 units/s down) into a slide. In the air, the latest of jump/slide wins. |
+| Fire bazooka | `F` | Fire the held bazooka (Round 4, §3.8). Does nothing if you don't hold one. |
 | Pause | `Esc` / `P` | Toggle pause |
 | Sound | `M` | Toggle sound on/off in any state (saved) |
 | (Later) Touch | Swipe up/down/left/right | Same as keys, for phones and tablets |
@@ -182,6 +191,21 @@ Exact rules (ADR-0011):
 - **Data shards** (Phase 8, ADR-0016): glowing blue diamonds in short lines (3–5, 2.2 apart) in the open stretch between two obstacle rows. About half the gaps get a line, in a lane that isn't BLOCKed in the next row (preferably one open in both rows). Each shard is worth **25 × the current multiplier**. They sit at waist height (y 0.45–1.25): running or sliding through collects them, jumping over misses them. They are always optional: they never overlap an obstacle (each is kept a full row margin clear) and use their own seeded RNG, so the obstacle sequence and its fairness are unchanged. The HUD and the game-over screen show the shard count.
 - **Lifetime shard total** (Round 2, R4): every shard collected is added to a saved total that survives closing the browser, the same way the high score does. The menu shows the total; the game-over screen shows this run's shards and the new total. The total doesn't change the score. Since Round 3 it is spent in the **shop** (§4) to buy characters.
 
+### 3.8 Power-ups (Round 4, R11–R16; docs/decisions/0004)
+Three power-ups lie on the road now and then. They last only for the current run: nothing about them is saved, and every new run starts with none.
+
+| Power-up | Effect |
+|---|---|
+| **Bazooka** | You carry **one shot**. Press `F` to fire it: it destroys every obstacle in the **next row**, the closest row that can still hit you (one you're passing through counts, so it can save you at the last moment). If no row is ahead, the shot is kept. Picking up another while holding one changes nothing: you still hold one shot. |
+| **Double score** | For **30 s**, every point you earn counts double: distance points and shard points. The number of shards (and the lifetime total) is not doubled. |
+| **Phase** | For **30 s**, obstacles can't hit you: you run straight through them (no head-on catch, no stumble). When it runs out, every obstacle less than **1 s** ahead (at the current speed) is also passed through, so a phase never ends with an unavoidable hit. |
+
+- **Picked up off the ground (R14):** each power-up is a small glowing case standing on the road in one lane (pickup box 1.2 wide, 1.0 tall, 1.0 deep, from the road up). Running or sliding through it picks it up; jumping over it misses it.
+- **Placement (R15):** like shards, a power-up goes in the open stretch between two rows, centred and a full row margin clear of both, in a lane that's open in both rows if possible (otherwise one open in the next row), never on a shard line. The first is placed after a random 35–65 s of running, and each one after that a random 35–65 s after the last (about one every 50 s on average). The type is picked at random, each equally likely. Power-ups use **their own seeded RNG**, so the obstacles and shards of every seed are unchanged.
+- **Together (R16):** different power-ups can be active at once. Picking up double score or phase while it's already active resets its timer to 30 s. Timers count only simulated run time: they stop while paused and during the catch beat.
+- **HUD:** a row under the score shows each active power-up: `BAZOOKA [F]`, `2X 27`, `PHASE 12` (seconds left). A timer blinks in its last 3 s.
+- **Looks:** the cases avoid the obstacle cue colours (amber / white / red) and the shards' blue: the bazooka is magenta, double score is lime, phase is violet. Firing draws a short rocket streak to the row and blows each obstacle apart in sparks. While phasing, the runner has a faint violet glow. A held bazooka is drawn on the runner's shoulder.
+
 ---
 
 ## 4. Game States & GUI
@@ -199,7 +223,7 @@ All UI is HTML/CSS layered on top of the canvas (not drawn in three.js). It uses
 |---|---|
 | **Main menu** | Title, **Play** button (also `Enter`/`Space`), **Shop** button, current high score, lifetime shard total, controls cheat-sheet, **Sound on/off** toggle (also `M`), **Quality high/low** toggle |
 | **Shop** (Round 3) | Shard total, one card per character (name, short description, price or OWNED / EQUIPPED, a Buy or Equip button), a note that bought characters last until the game is closed, **Back** (also `Esc`/`P`). The equipped character stands on the road behind the panel. |
-| **HUD** (while playing) | Score (top-left) with the shard count under it, high score (top-right; tracks the live score once you beat it), sound and pause buttons |
+| **HUD** (while playing) | Score (top-left) with the shard count under it and the active power-ups under that (Round 4, §3.8), high score (top-right; tracks the live score once you beat it), sound and pause buttons |
 | **Pause** | Dimmed overlay, **Resume** (also `Esc`/`P`/`Enter`), **Restart**, **Main Menu**, **Sound on/off**, **Quality high/low**. The game also auto-pauses when the tab or window loses focus, but only mid-run. |
 | **Game over** | "CAUGHT" heading, final score, shards collected this run, lifetime shard total, high score, a "NEW HIGH SCORE!" badge when earned, **Play Again** (also `Enter`/`Space`, after a 0.6 s delay so a mashed jump can't skip the screen), **Main Menu** |
 
@@ -417,6 +441,19 @@ Requirements R7–R10 (§1). Decision records: `docs/decisions/0002-session-only
   - [x] R8: the Android (silver robot) and Alien (green alien) can be bought, equipped and played; each reads clearly against the night scene at start and max speed *(screenshots in the shop, at start speed and at speed 35)*
   - [x] R9: every character is built on the same rig, stands about 1.8 tall and slides under the 0.8 slide height like the Hacker, and fits the same hitbox; the run simulation never reads the skin; every earlier test still passes; still 60 fps at max speed with each character *(Node: same pivots; top within +0.03/−0.05 of the Hacker, no wider, in 15 poses; browser: lanes, jump, slide, pause, catch, Play Again as the Android; 60.2 fps / 104 draw calls (Android), 60.3 fps / 101 (Alien) at speed 35; 0 storage writes during play; 0 console errors or warnings; every request to localhost)*
   - [x] R10: after a reload only the Hacker is owned and equipped, and the shard total still has the spend deducted; no new `localStorage` key exists; the shop writes nothing during play *(browser: reload → Hacker only, Android back on sale, total still 60, keys unchanged, high score kept)*
+
+### Round 4: Power-ups
+Requirements R11–R16 (§1). Decision record: `docs/decisions/0004-…` (written during the round). Rules in §3.8.
+- Pure `js/logic/powerups.js`: the `POWER` types, pickup placement from the spawner's gap log with its own seeded RNG, pickup collection, the bazooka shot (`fireBazooka`), and the double-score and phase timers. All of it lives in the run and is cleared by `resetRun()`.
+- `js/logic/run.js`: `stepRun()` fires a requested shot, ticks the timers, doubles score gains while double score is on, and skips hits while phasing (plus the 1 s grace when phase ends).
+- `js/logic/input.js` / `state.js`: `F` → `ACTION.FIRE` → `CMD.FIRE`, only while PLAYING.
+- `js/powerupModels.js` (view, DOM-free) and `game.js`: the pickup cases, the carried bazooka, the rocket streak and explosion, the phase glow, sounds, and the HUD row.
+- **Acceptance:**
+  - [ ] R11/R14: all three power-ups appear on the road in a lane between rows, never on an obstacle or a shard; running or sliding through one picks it up, jumping over misses it
+  - [ ] R12: with a bazooka held, `F` destroys every obstacle in the next row (including one you're passing through) and uses up the shot; `F` without one does nothing; with no row ahead the shot is kept
+  - [ ] R13: double score doubles distance and shard points (not the shard count) for 30 s; phase lets you run through any obstacle (no catch, no stumble) for 30 s, and nothing within 1 s ahead can hit you as it ends; both stop while paused
+  - [ ] R15: placement is random (seeded) and rare: the first after 35–65 s, then 35–65 s apart (about one every 50 s); each type about a third of the time; the obstacle and shard sequences of every seed are unchanged
+  - [ ] R16: power-ups can overlap; picking up an active timed one resets it to 30 s; a new run starts with none; every earlier test still passes; no per-frame allocations or storage writes; no new storage key; still 60 fps at max speed
 
 ---
 
