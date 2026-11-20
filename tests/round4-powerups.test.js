@@ -169,18 +169,22 @@ const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 const LONG = 400; // seconds per seed
 
 // One shared pass over SEEDS × LONG seconds; the R11/R14/R15 tests below read it.
-const placements = []; // { seed, t, type, lane, s }
+const placements = []; // { seed, t, type, lane, s, arrived }: t = placed, arrived = when it reached the player
 const violations = [];
 for (const seed of SEEDS) {
   let seen = 0;
   godRun(seed, LONG, (run) => {
     const pu = run.powerups;
+    // A pickup reaches the player when its centre passes under them (z = 0).
+    for (const p of placements) {
+      if (p.seed === seed && p.arrived === undefined && run.scroll >= p.s) p.arrived = run.elapsed;
+    }
     if (pu.placed === seen) return;
     seen = pu.placed;
     // The newest pickup: the active slot furthest ahead.
     let o = null;
     for (const x of pu.slots) if (x.active && (o === null || x.s > o.s)) o = x;
-    placements.push({ seed, t: run.elapsed, type: o.type, lane: o.lane, s: o.s });
+    placements.push({ seed, t: run.elapsed, type: o.type, lane: o.lane, s: o.s, arrived: undefined });
     const clear = powerupClearance(CONFIG);
     for (const b of run.spawner.slots) {
       if (b.active && Math.abs(b.s - o.s) < clear - 1e-9) violations.push(`seed ${seed}: pickup at ${o.s.toFixed(2)} within ${clear} of an obstacle at ${b.s.toFixed(2)}`);
@@ -211,22 +215,35 @@ test('R11/R14: pickups are placed between rows: never on or next to an obstacle,
   assert.deepEqual(violations, []);
 });
 
-test('R15: power-ups are rare: the first after 35–65 s, then 35–65 s apart (about one every 50 s)', () => {
-  const gaps = [];
+// R15 as changed by the user (2026-11-19): one reaches the player every 30 s,
+// on a fixed clock (30, 60, 90 s…). A pickup can only sit in a gap between
+// rows that has room, so each arrives up to SLACK after its slot, never before.
+const SLACK = 3;
+
+test('R15: a power-up reaches the player every 30 s (at 30, 60, 90 s…), the first about 30 s into the run', () => {
+  assert.equal(CONFIG.POWERUP_FIRST, 30);
+  assert.equal(CONFIG.POWERUP_INTERVAL, 30);
+  let late = 0;
+  let n = 0;
   for (const seed of SEEDS) {
-    const ts = placements.filter((p) => p.seed === seed).map((p) => p.t);
-    assert.ok(ts[0] >= CONFIG.POWERUP_INTERVAL_MIN, `seed ${seed}: first at ${ts[0].toFixed(1)} s`);
-    assert.ok(ts[0] <= CONFIG.POWERUP_INTERVAL_MAX + 5, `seed ${seed}: first at ${ts[0].toFixed(1)} s`);
-    for (let i = 1; i < ts.length; i++) gaps.push(ts[i] - ts[i - 1]);
+    const ts = placements.filter((p) => p.seed === seed && p.arrived !== undefined).map((p) => p.arrived);
+    // Every slot that has come round by the end of the run is filled (the last may still be on its way).
+    assert.ok(ts.length >= Math.floor((LONG - SLACK) / CONFIG.POWERUP_INTERVAL) && ts.length <= Math.floor(LONG / CONFIG.POWERUP_INTERVAL), `seed ${seed}: ${ts.length} in ${LONG} s`);
+    ts.forEach((t, i) => {
+      const slot = CONFIG.POWERUP_FIRST + i * CONFIG.POWERUP_INTERVAL;
+      assert.ok(t >= slot - 0.05 && t <= slot + SLACK, `seed ${seed}: pickup ${i + 1} reached the player at ${t.toFixed(2)} s (slot ${slot} s)`);
+      late += t - slot;
+      n++;
+    });
   }
-  for (const g of gaps) {
-    // +5 s: a due power-up waits for the next gap long enough to hold it.
-    assert.ok(g >= CONFIG.POWERUP_INTERVAL_MIN && g <= CONFIG.POWERUP_INTERVAL_MAX + 5, `interval ${g.toFixed(1)} s`);
+  assert.ok(late / n < 1.5, `on average ${(late / n).toFixed(2)} s after the slot`);
+});
+
+test('R15: a pickup is placed far enough ahead to be seen coming (never pops in)', () => {
+  for (const p of placements) {
+    if (p.arrived === undefined) continue;
+    assert.ok(p.arrived - p.t > 3, `seed ${p.seed}: placed only ${(p.arrived - p.t).toFixed(2)} s before it arrived`);
   }
-  const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-  assert.ok(mean > 44 && mean < 58, `mean interval ${mean.toFixed(1)} s`);
-  assert.equal(CONFIG.POWERUP_INTERVAL_MIN, 35);
-  assert.equal(CONFIG.POWERUP_INTERVAL_MAX, 65);
 });
 
 test('R15: placement is random: every type and every lane shows up, each type roughly a third of the time', () => {
@@ -235,9 +252,9 @@ test('R15: placement is random: every type and every lane shows up, each type ro
     assert.ok(share > 0.18 && share < 0.5, `type ${type}: ${(share * 100).toFixed(0)}%`);
   }
   for (const lane of [0, 1, 2]) assert.ok(placements.some((p) => p.lane === lane), `lane ${lane}`);
-  // Different seeds give different placements.
-  const first = (seed) => placements.find((p) => p.seed === seed);
-  assert.ok(new Set(SEEDS.map((s) => first(s).t.toFixed(2))).size > 1);
+  // Different seeds give different placements (which type, in which lane).
+  const pattern = (seed) => placements.filter((p) => p.seed === seed).slice(0, 6).map((p) => `${p.type}${p.lane}`).join(' ');
+  assert.ok(new Set(SEEDS.map(pattern)).size > SEEDS.length / 2, 'the type/lane sequence differs between seeds');
 });
 
 test('R15: placement is deterministic for a seed (its own seeded RNG)', () => {

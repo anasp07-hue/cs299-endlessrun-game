@@ -359,6 +359,11 @@ test('god mode: hits are reported but nothing stumbles or catches', () => {
  */
 function playClipRun(seed, seconds, clipAfter) {
   const run = createRun(CONFIG, seed);
+  // No power-ups (Round 4) in these runs: this tests the stumble and bounce,
+  // and a phase pickup would pass the deliberate clip straight through.
+  // Obstacles are unchanged (power-ups use their own RNG). Phasing through a
+  // clip is tested in round4-powerups.test.js.
+  run.powerups.nextAt = Infinity;
   const bot = makeBot();
   const p = run.player;
   const sp = run.spawner;

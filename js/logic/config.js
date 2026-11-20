@@ -262,8 +262,8 @@ export const CONFIG = Object.freeze({
   // Pickups stand on the road between rows (like shards, with their own RNG,
   // so obstacles and shards are unchanged). Run state only: never saved.
   POWERUP_DURATION: 30, // seconds of double score / phase (R13)
-  POWERUP_INTERVAL_MIN: 35, // seconds of running before the first pickup, and between pickups...
-  POWERUP_INTERVAL_MAX: 65, // ...uniformly random in [MIN, MAX]: about one every 50 s (R15)
+  POWERUP_FIRST: 30, // seconds into a run when the first pickup reaches the player (R15, user's change 2026-11-19)...
+  POWERUP_INTERVAL: 30, // ...and then one reaches the player every this many seconds (docs/decisions/0006)
   POWERUP_SCORE_MULT: 2, // double score: every point gained counts this many times
   POWERUP_PHASE_GRACE: 1, // seconds: as phase ends, obstacles this close ahead (at current speed) are passed through too
   POWERUP_HIT_W: 1.2, // pickup box (x)...

@@ -9,9 +9,12 @@
 // Placement works like the shards (ADR-0016): it reads the spawner's gap log
 // and puts a pickup in the open stretch between two rows, clear of both and
 // never on a shard line. It draws from its OWN seeded RNG, so the obstacle
-// and shard sequences of every seed are unchanged. A pickup becomes due a
-// random POWERUP_INTERVAL_MIN–MAX seconds after the last one (or the start);
-// the first suitable gap after that gets it.
+// and shard sequences of every seed are unchanged. Timing is by ARRIVAL
+// (docs/decisions/0006): pickups are scheduled to reach the player at
+// POWERUP_FIRST, then every POWERUP_INTERVAL seconds after (30, 60, 90 s…).
+// Each goes in the first suitable gap the player will reach at or after its
+// slot, so it arrives a moment after (never before); the schedule itself
+// never drifts.
 //
 // Like obstacles and shards, a pickup stores `s` (track position); its z is `scroll - s`.
 
@@ -19,6 +22,7 @@ import { createRng } from './rng.js';
 import { overlaps, setObstacleBox } from './collision.js';
 import { laneX } from './world.js';
 import { rowMargin, GAP_LOG } from './spawner.js';
+import { speedAt } from './difficulty.js';
 
 export const POWER = Object.freeze({ NONE: 0, BAZOOKA: 1, DOUBLE: 2, PHASE: 3 });
 export const POWER_TYPES = Object.freeze([POWER.BAZOOKA, POWER.DOUBLE, POWER.PHASE]);
@@ -38,7 +42,7 @@ export function createPowerups(cfg, seed = 0) {
     slots,
     seen: 0, // spawner gap-log entries already handled
     active: 0, // pickups on the road
-    nextAt: 0, // run time (s) from which the next pickup is due
+    nextAt: 0, // the next pickup's slot: the run time (s) it should reach the player (30, 60, 90 s…)
     placed: 0, // pickups placed this run
     picked: 0, // pickups collected this run
     lastType: POWER.NONE, // type of the latest pickup collected
@@ -68,7 +72,7 @@ export function resetPowerups(pu, cfg, seed) {
   }
   pu.seen = 0;
   pu.active = 0;
-  pu.nextAt = nextInterval(pu.rng, cfg);
+  pu.nextAt = cfg.POWERUP_FIRST;
   pu.placed = 0;
   pu.picked = 0;
   pu.lastType = POWER.NONE;
@@ -83,9 +87,20 @@ export function resetPowerups(pu, cfg, seed) {
   pu.phaseEnds = 0;
 }
 
-/** Seconds until the next pickup is due: uniform in [POWERUP_INTERVAL_MIN, POWERUP_INTERVAL_MAX). */
-export function nextInterval(rng, cfg) {
-  return rng.range(cfg.POWERUP_INTERVAL_MIN, cfg.POWERUP_INTERVAL_MAX);
+/**
+ * Seconds the player takes to travel `dist` units from run time `elapsed`,
+ * on the speed ramp (SPEED_ACCEL up to SPEED_MAX; SPEC §3.5). Closed form,
+ * allocation-free.
+ */
+export function travelTime(dist, elapsed, cfg) {
+  if (dist <= 0) return 0;
+  const v0 = speedAt(elapsed, cfg);
+  const a = cfg.SPEED_ACCEL;
+  if (v0 >= cfg.SPEED_MAX || a <= 0) return dist / v0;
+  const tCap = (cfg.SPEED_MAX - v0) / a; // until the cap
+  const dCap = v0 * tCap + 0.5 * a * tCap * tCap;
+  if (dist <= dCap) return (Math.sqrt(v0 * v0 + 2 * a * dist) - v0) / a;
+  return tCap + (dist - dCap) / cfg.SPEED_MAX;
 }
 
 /** Clear distance kept between a pickup's centre and either row's obstacle centres. */
@@ -119,7 +134,7 @@ function countLanes(mask) {
   return n;
 }
 
-/** Try to place the due pickup in gap [from, to]. Returns true if placed. */
+/** Try to place the due pickup in gap [from, to] (centred). Returns true if placed. */
 function tryPlace(pu, sh, from, to, prevOpen, nextOpen, cfg) {
   const clear = powerupClearance(cfg);
   if (to - from < 2 * clear) return false; // too short: wait for the next gap
@@ -151,9 +166,10 @@ function tryPlace(pu, sh, from, to, prevOpen, nextOpen, cfg) {
 }
 
 /**
- * Recycle pickups behind the camera and place a due pickup in the first
- * suitable gap the spawner has logged since last time. Call right after
- * updateShards (so this gap's shard line is known). Allocation-free.
+ * Recycle pickups behind the camera, and put the next pickup in the first
+ * newly logged gap that the player will reach at or after `nextAt` (and that
+ * has room). Call right after updateShards (so this gap's shard line is
+ * known). Allocation-free.
  */
 export function updatePowerups(pu, sp, sh, scroll, elapsed, cfg) {
   for (let i = 0; i < pu.slots.length; i++) {
@@ -167,9 +183,14 @@ export function updatePowerups(pu, sp, sh, scroll, elapsed, cfg) {
   while (pu.seen < sp.gaps) {
     const k = pu.seen % GAP_LOG;
     pu.seen++;
-    if (elapsed < pu.nextAt) continue;
-    if (tryPlace(pu, sh, sp.gapFrom[k], sp.gapTo[k], sp.gapPrevOpen[k], sp.gapNextOpen[k], cfg)) {
-      pu.nextAt = elapsed + nextInterval(pu.rng, cfg);
+    const from = sp.gapFrom[k];
+    const to = sp.gapTo[k];
+    const arrive = elapsed + travelTime((from + to) / 2 - scroll, elapsed, cfg);
+    if (arrive < pu.nextAt) continue; // the player gets there too early
+    if (tryPlace(pu, sh, from, to, sp.gapPrevOpen[k], sp.gapNextOpen[k], cfg)) {
+      // On a fixed clock: waiting for a gap that fits never pushes later pickups back.
+      do pu.nextAt += cfg.POWERUP_INTERVAL;
+      while (pu.nextAt <= arrive);
     }
   }
 }
