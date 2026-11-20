@@ -25,6 +25,12 @@
         <span class="hud-label">SHARDS</span>
         <span class="hud-shard-row"><span class="shard-icon" aria-hidden="true"></span><span id="hud-shards" class="hud-value"></span></span>
       </div>
+      <!-- Active power-ups (Round 4, SPEC §3.8): shown only while you have them -->
+      <div id="hud-powers" class="hud-powers">
+        <span id="hud-pw-bazooka" class="hud-power power-bazooka" hidden>BAZOOKA <kbd>F</kbd></span>
+        <span id="hud-pw-double" class="hud-power power-double" hidden>2X SCORE <span class="hud-power-time"></span></span>
+        <span id="hud-pw-phase" class="hud-power power-phase" hidden>PHASE <span class="hud-power-time"></span></span>
+      </div>
       <div class="hud-stat hud-right">
         <span class="hud-label">BEST</span>
         <span id="hud-best" class="hud-value"></span>
@@ -50,9 +56,11 @@
           <dt>← → / A D</dt><dd>change lane</dd>
           <dt>↑ / W / Space</dt><dd>jump</dd>
           <dt>↓ / S</dt><dd>slide (fast-fall in the air)</dd>
+          <dt>F</dt><dd>fire the bazooka (once you pick one up)</dd>
           <dt>Esc / P</dt><dd>pause</dd>
           <dt>M</dt><dd>sound on / off</dd>
           <dt><span class="shard-icon" aria-hidden="true"></span> shards</dt><dd>grab them for bonus points</dd>
+          <dt><span class="power-icon" aria-hidden="true"></span> power-ups</dt><dd>bazooka · 2x score · phase through walls</dd>
         </dl>
         <div class="settings-row">
           <button id="btn-mute-menu" class="btn btn-small js-mute" type="button" aria-pressed="false">SOUND: ON</button>

@@ -6,6 +6,9 @@
   --glow-pale: #c4d7e6;
   --dusk-violet: #6a5f92;
   --danger-red: #ff3344;
+  --power-bazooka: #e86ac8;
+  --power-double: #b6e85a;
+  --power-phase: #b06cff;
 
   /* UI-only values (not scene colors). Written as rgb()/rgba(), not hex: hex
      custom properties are reserved for PALETTE colors (tests/palette.test.js). */
@@ -123,6 +126,71 @@ body {
   background: var(--glow-blue);
   box-shadow: 0 0 6px rgba(127, 182, 230, 0.6);
   transform: rotate(45deg);
+  vertical-align: middle;
+}
+
+/* Active power-ups (Round 4): one tag per power-up, in its own colour, under the shards. */
+.hud-powers {
+  position: absolute;
+  left: 18px;
+  top: 122px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.hud-power {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  padding: 3px 8px 3px 7px;
+  background: var(--panel-bg);
+  border-left: 2px solid currentColor;
+  border-radius: 2px;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-power[hidden] {
+  display: none;
+}
+
+.hud-power kbd {
+  font-size: 11px;
+  padding: 0 4px;
+}
+
+.power-bazooka {
+  color: var(--power-bazooka);
+}
+
+.power-double {
+  color: var(--power-double);
+}
+
+.power-phase {
+  color: var(--power-phase);
+}
+
+/* The last seconds of a timed power-up: a slow blink (not a strobe). */
+.hud-power.is-warn {
+  animation: power-warn 0.5s steps(2, jump-none) infinite;
+}
+
+@keyframes power-warn {
+  from { opacity: 1; }
+  to { opacity: 0.35; }
+}
+
+/* Menu cheat-sheet: a small power-up case icon. */
+.power-icon {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--power-phase);
+  border-radius: 2px;
+  box-shadow: 0 0 6px rgba(176, 108, 255, 0.5);
   vertical-align: middle;
 }
 

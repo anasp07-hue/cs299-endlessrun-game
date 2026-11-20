@@ -272,6 +272,9 @@ export const CONFIG = Object.freeze({
   MAX_POWERUPS: 4, // pooled pickups (rarely more than 1 on the road)
   POWERUP_WARN_TIME: 3, // the HUD timer blinks for its last seconds
   POWERUP_STREAK_TIME: 0.18, // seconds the bazooka's rocket streak stays on screen (view only)
+  POWERUP_SPIN: 1.6, // radians per second a pickup turns on the road (view only)
+  POWERUP_BLAST_TIME: 0.4, // seconds an explosion fireball lasts (view only)
+  TRAUMA_BLAST: 0.5, // camera shake when the bazooka fires
 
   // --- Quality setting (Phase 8, ADR-0016) ---
   PIXEL_RATIO_MAX_LOW: 1, // LOW quality renders at 1 pixel per CSS pixel and drops dust + sparks

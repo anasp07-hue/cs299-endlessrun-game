@@ -217,6 +217,36 @@ export function createAudio(cfg) {
     tone('sine', f, f, t, 0.09, 0.16, sfx, 0.003);
     tone('triangle', f * 1.5, f * 1.5, t + 0.045, 0.14, 0.08, sfx, 0.003);
   }
+  /** Power-up pickup (Round 4): a quick rising three-note arpeggio, pitched per type (1, 2, 3). */
+  function powerup(type) {
+    if (!ready()) return;
+    const t = ctx.currentTime;
+    const base = NOTE(ARP[(type * 2) % ARP.length] + 12);
+    for (let i = 0; i < 3; i++) {
+      const f = base * (i === 0 ? 1 : i === 1 ? 1.26 : 1.5);
+      tone('triangle', f, f, t + i * 0.055, 0.12, 0.14, sfx, 0.003);
+    }
+    tone('sine', base * 2, base * 2, t + 0.16, 0.25, 0.08, sfx, 0.004);
+  }
+
+  /** Bazooka shot (Round 4): a whoosh out, then a low boom and rubble. */
+  function bazooka() {
+    if (!ready()) return;
+    const t = ctx.currentTime;
+    burst(t, 0.16, 0.4, 'bandpass', 900, 3200, sfx);
+    tone('sawtooth', 180, 60, t + 0.06, 0.4, 0.22, sfx);
+    tone('sine', 90, 32, t + 0.07, 0.7, 0.75, sfx);
+    burst(t + 0.07, 0.6, 0.55, 'lowpass', 1800, 160, sfx);
+  }
+
+  /** Phase running out (Round 4): a short falling glide, so you know obstacles are solid again. */
+  function phaseEnd() {
+    if (!ready()) return;
+    const t = ctx.currentTime;
+    tone('sine', 880, 330, t, 0.35, 0.14, sfx);
+    tone('triangle', 660, 247, t, 0.35, 0.07, sfx);
+  }
+
   function click() {
     if (!ready()) return;
     tone('sine', 1250, 1250, ctx.currentTime, 0.035, 0.12, sfx, 0.002);
@@ -282,5 +312,5 @@ export function createAudio(cfg) {
     }
   }
 
-  return { unlock, setMuted, setHidden, setIntensity, setDuck, jump, land, slide, stumble, caught, nearMiss, shard, click, crackle, isReady: ready };
+  return { unlock, setMuted, setHidden, setIntensity, setDuck, jump, land, slide, stumble, caught, nearMiss, shard, powerup, bazooka, phaseEnd, click, crackle, isReady: ready };
 }

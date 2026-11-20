@@ -68,6 +68,8 @@ import { loadHighScore, saveHighScore, finalScore, isNewHighScore } from './js/l
 import { loadShardTotal, bankRunShards } from './js/logic/shardbank.js';
 import { writeDigits, DIGIT_STRINGS } from './js/logic/hud.js';
 import { PALETTE } from './js/palette.js';
+import { POWER, POWER_TYPES, requestFire, applyPower, phasing } from './js/logic/powerups.js';
+import { buildPowerupModels, buildCarriedBazooka, buildPowerupBeam, POWER_COLORS } from './js/powerupModels.js';
 
 const params = new URLSearchParams(window.location.search);
 const DEBUG = params.has('debug');
@@ -202,6 +204,75 @@ shardMesh.count = 0;
 shardMesh.frustumCulled = false;
 scene.add(shardMesh);
 
+// --- Power-ups (js/logic/powerups.js, Round 4, SPEC §3.8) ---------------------
+// Pickups: one InstancedMesh per (type, part), sharing the obstacles' two
+// fogged vertex-colour materials (6 draw calls at most; none with no pickups).
+const powerupModels = buildPowerupModels();
+const powerupSets = []; // [type] = { body, glow }
+const powerupMeshes = [];
+const powerupBeamGeo = buildPowerupBeam(CONFIG);
+for (const t of POWER_TYPES) {
+  const pair = {};
+  for (const part of ['body', 'glow']) {
+    const mesh = new THREE.InstancedMesh(
+      powerupModels[t][part], part === 'body' ? obstacleBodyMat : obstacleGlowMat, CONFIG.MAX_POWERUPS,
+    );
+    mesh.count = 0;
+    mesh.frustumCulled = false;
+    scene.add(mesh);
+    powerupMeshes.push(mesh);
+    pair[part] = mesh;
+  }
+  // A faint beam of light above it in its own colour, so a rare pickup is easy to spot far ahead.
+  const beam = new THREE.InstancedMesh(powerupBeamGeo, new THREE.MeshBasicMaterial({
+    color: POWER_COLORS[t], vertexColors: true, transparent: true, opacity: 0.55,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  }), CONFIG.MAX_POWERUPS);
+  beam.count = 0;
+  beam.frustumCulled = false;
+  scene.add(beam);
+  powerupMeshes.push(beam);
+  pair.beam = beam;
+  powerupSets[t] = pair;
+}
+// Phase: a faint violet shell around the runner (additive, so it only brightens).
+const phaseShellMat = new THREE.MeshBasicMaterial({
+  color: PALETTE.powerPhase, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
+});
+const phaseShell = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), phaseShellMat);
+phaseShell.visible = false;
+scene.add(phaseShell);
+// Bazooka shot: a rocket streak from the shoulder to the row, and a fireball per destroyed obstacle.
+const streakMat = new THREE.MeshBasicMaterial({
+  color: PALETTE.powerBazooka, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
+});
+const streak = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0, 0.5), streakMat);
+streak.visible = false;
+scene.add(streak);
+const fireballGeo = new THREE.IcosahedronGeometry(1, 1);
+const fireballs = [];
+for (let i = 0; i < CONFIG.LANE_COUNT; i++) {
+  const m = new THREE.Mesh(fireballGeo, new THREE.MeshBasicMaterial({
+    color: PALETTE.powerBazooka, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  m.visible = false;
+  scene.add(m);
+  fireballs.push(m);
+}
+const streakTarget = new THREE.Vector3(); // scratch
+// The held bazooka, strapped across each runner's back (R12); shown only while you hold the shot.
+const carriedGeo = buildCarriedBazooka();
+const carried = [];
+for (const id of Object.keys(runners)) {
+  for (const part of ['body', 'glow']) {
+    const m = new THREE.Mesh(carriedGeo[part], part === 'body' ? obstacleBodyMat : obstacleGlowMat);
+    m.visible = false;
+    runners[id].torso.add(m);
+    carried.push(m);
+  }
+}
+let carriedShown = false;
+
 // --- Run state ----------------------------------------------------------------
 // One run object for the whole session; resetRun() (js/logic/run.js) restores
 // every piece of it on Play / Play Again / Restart / Main Menu.
@@ -291,7 +362,33 @@ const finalShardsEl = $('final-shards');
 let hudShownScore = -1;
 let hudShownBest = -1;
 let hudShownShards = -1;
+// Power-up tags (Round 4): touched only when what they show changes.
+const hudPwBazooka = $('hud-pw-bazooka');
+const hudPwDouble = $('hud-pw-double');
+const hudPwPhase = $('hud-pw-phase');
+const hudPwDoubleTime = hudPwDouble.querySelector('.hud-power-time');
+const hudPwPhaseTime = hudPwPhase.querySelector('.hud-power-time');
+const SECOND_STRINGS = Array.from({ length: CONFIG.POWERUP_DURATION + 1 }, (_, i) => String(i)); // no per-frame strings
+const hudPw = { bazooka: null, double: -1, phase: -1 };
+
+/** Show a timed power-up's tag with whole seconds left (rounded up), blinking near the end. */
+function showPowerTimer(el, timeEl, t, key) {
+  const secs = Math.min(CONFIG.POWERUP_DURATION, Math.ceil(t));
+  if (secs === hudPw[key]) return;
+  hudPw[key] = secs;
+  el.hidden = secs <= 0;
+  if (secs > 0) timeEl.textContent = SECOND_STRINGS[secs];
+  el.classList.toggle('is-warn', secs > 0 && secs <= CONFIG.POWERUP_WARN_TIME);
+}
+
 function updateHud() {
+  const pu = run.powerups;
+  if (pu.bazooka !== hudPw.bazooka) {
+    hudPwBazooka.hidden = !pu.bazooka;
+    hudPw.bazooka = pu.bazooka;
+  }
+  showPowerTimer(hudPwDouble, hudPwDoubleTime, pu.doubleTime, 'double');
+  showPowerTimer(hudPwPhase, hudPwPhaseTime, pu.phaseTime, 'phase');
   if (run.shardCount !== hudShownShards) {
     hudShards.update(run.shardCount);
     hudShownShards = run.shardCount;
@@ -443,13 +540,14 @@ function onKeyDown(e) {
   const cmd = commandFor(state, action, gameOverAge, CONFIG);
   const p = run.player;
   const live = acceptsInput(run); // gameplay keys are ignored during the catch beat
-  if (cmd === CMD.LEFT || cmd === CMD.RIGHT || cmd === CMD.JUMP || cmd === CMD.SLIDE) {
+  if (cmd === CMD.LEFT || cmd === CMD.RIGHT || cmd === CMD.JUMP || cmd === CMD.SLIDE || cmd === CMD.FIRE) {
     if (!live) return;
   }
   if (cmd === CMD.LEFT) queueLaneMove(p, -1, CONFIG);
   else if (cmd === CMD.RIGHT) queueLaneMove(p, 1, CONFIG);
   else if (cmd === CMD.JUMP) requestJump(p, CONFIG);
   else if (cmd === CMD.SLIDE) requestSlide(p, CONFIG);
+  else if (cmd === CMD.FIRE) requestFire(run.powerups); // no bazooka: nothing happens (R12)
   else if (cmd === CMD.MUTE) toggleMute();
   else if (cmd !== CMD.NONE) dispatch(cmd); // PLAY / PAUSE / RESUME
 }
@@ -610,6 +708,7 @@ const sparkRng = createRng(99);
 const fx = {
   jumps: 0, landings: 0, slides: 0, stumbles: 0, near: 0, catching: false, shards: 0, shardStreak: 0, shardAt: -99,
   landAge: 99, landStrength: 0, flashAge: 99, lastScroll: NaN, flashShown: -1,
+  picked: 0, shots: 0, phaseEnds: 0, blastAge: 99, // power-ups (Round 4)
 };
 const flashEl = $('flash');
 
@@ -646,6 +745,10 @@ function resetFx() {
   fx.landStrength = 0;
   fx.flashAge = 99;
   fx.lastScroll = NaN;
+  fx.picked = run.powerups.picked;
+  fx.shots = run.powerups.shots;
+  fx.phaseEnds = run.powerups.phaseEnds;
+  fx.blastAge = 99;
   resetShake(shake);
   clearSparks(sparks);
 }
@@ -700,10 +803,32 @@ function updateFx(dt) {
     audio.shard(fx.shardStreak);
     spark(p.x, CONFIG.SHARD_Y, 0, 6, 3, 0.4, 0);
   }
+  const pu = run.powerups;
+  if (pu.picked !== fx.picked) {
+    fx.picked = pu.picked;
+    audio.powerup(pu.lastType);
+    spark(p.x, 0.5, 0, 16, 4, 1.2, 0);
+  }
+  if (pu.shots !== fx.shots) {
+    // The bazooka fired (R12): streak, fireballs, sparks and a boom at each destroyed obstacle.
+    fx.shots = pu.shots;
+    fx.blastAge = 0;
+    audio.bazooka();
+    addTrauma(shake, CONFIG.TRAUMA_BLAST);
+    for (let lane = 0; lane < CONFIG.LANE_COUNT; lane++) {
+      if ((pu.blastMask & (1 << lane)) === 0) continue;
+      spark(laneX(lane, CONFIG.LANE_WIDTH, CONFIG.LANE_COUNT), 1.0, run.scroll - pu.blastS[lane], 30, 9, 1.4, 0);
+    }
+  }
+  if (pu.phaseEnds !== fx.phaseEnds) {
+    fx.phaseEnds = pu.phaseEnds;
+    audio.phaseEnd();
+  }
   // Effects age (and the world-attached sparks move) only while the run is live.
   if (state === STATE.PLAYING) {
     fx.landAge += dt;
     fx.flashAge += dt;
+    fx.blastAge += dt;
     stepShake(shake, dt, CONFIG);
   }
   audio.setIntensity((run.speed - CONFIG.SPEED_START) / (CONFIG.SPEED_MAX - CONFIG.SPEED_START));
@@ -851,6 +976,11 @@ function updateCharacters(px, py, alpha, dt) {
     hitOverlay(runnerPose, hitWeight(c.hitAge, CONFIG, caught), c.stumbleDir);
   }
   applyPose(runner, runnerPose);
+  const armed = !atMenu && run.powerups.bazooka;
+  if (armed !== carriedShown) {
+    for (let i = 0; i < carried.length; i++) carried[i].visible = armed;
+    carriedShown = armed;
+  }
 
   // Agent: gap units behind (toward the camera), running the Hacker's path
   // from gap/speed seconds ago, so he jumps, slides, and dodges what the
@@ -944,9 +1074,79 @@ function render(alpha, dt) {
   // City: chunks from the same interpolated scroll as the road and obstacles.
   if (state !== STATE.PAUSED) cityTime += dt;
   city.update(s, cityTime, camera);
+  renderPowerups(s, px, lerp(p.prevY, p.y, alpha));
   renderFx(s, dt);
 
   renderer.render(scene, camera);
+}
+
+/** Power-up pickups on the road, the phase shell, the rocket streak and fireballs (view only). */
+function renderPowerups(s, px, py) {
+  for (let i = 0; i < powerupMeshes.length; i++) powerupMeshes[i].count = 0;
+  const slots = run.powerups.slots;
+  for (let i = 0; i < slots.length; i++) {
+    const o = slots[i];
+    if (!o.active) continue;
+    const set = powerupSets[o.type];
+    scratchMatrix.makeRotationY(cityTime * CONFIG.POWERUP_SPIN + o.s);
+    scratchMatrix.setPosition(laneX(o.lane, CONFIG.LANE_WIDTH, CONFIG.LANE_COUNT), 0, s - o.s);
+    set.body.setMatrixAt(set.body.count++, scratchMatrix);
+    set.glow.setMatrixAt(set.glow.count++, scratchMatrix);
+    set.beam.setMatrixAt(set.beam.count++, scratchMatrix);
+  }
+  for (let i = 0; i < powerupMeshes.length; i++) {
+    const m = powerupMeshes[i];
+    if (m.count === 0) continue;
+    m.instanceMatrix.clearUpdateRanges();
+    m.instanceMatrix.addUpdateRange(0, m.count * 16);
+    m.instanceMatrix.needsUpdate = true;
+  }
+
+  // Phase: a breathing violet shell that shrinks with the slide and flickers in the last seconds.
+  const pu = run.powerups;
+  const atMenu = state === STATE.MENU || state === STATE.SHOP;
+  phaseShell.visible = !atMenu && phasing(pu);
+  if (phaseShell.visible) {
+    const sy = 1 - 0.5 * anim.slideW;
+    phaseShell.scale.set(0.62, 1.02 * sy, 0.5);
+    phaseShell.position.set(px, py + 0.92 * sy, 0);
+    let a = 0.13 + 0.05 * Math.sin(cityTime * 6);
+    if (pu.phaseTime < CONFIG.POWERUP_WARN_TIME && Math.sin(cityTime * 22) < 0) a *= 0.3;
+    phaseShellMat.opacity = a;
+  }
+
+  // Bazooka shot: streak to the row's centre, then fireballs where its obstacles were.
+  const age = fx.blastAge;
+  streak.visible = age < CONFIG.POWERUP_STREAK_TIME;
+  let lanes = 0;
+  let tx = 0;
+  let tz = 0;
+  for (let lane = 0; lane < CONFIG.LANE_COUNT; lane++) {
+    const ball = fireballs[lane];
+    const on = (pu.blastMask & (1 << lane)) !== 0;
+    ball.visible = on && age < CONFIG.POWERUP_BLAST_TIME;
+    if (!on) continue;
+    const x = laneX(lane, CONFIG.LANE_WIDTH, CONFIG.LANE_COUNT);
+    const z = s - pu.blastS[lane];
+    lanes++;
+    tx += x;
+    tz += z;
+    if (!ball.visible) continue;
+    const k = age / CONFIG.POWERUP_BLAST_TIME;
+    ball.position.set(x, 1.1, z);
+    ball.scale.setScalar(0.5 + 1.0 * k); // stays about a lane wide: never swallows the runner
+    ball.material.opacity = 0.75 * (1 - k) * (1 - k);
+  }
+  if (streak.visible && lanes > 0) {
+    streakTarget.set(tx / lanes, 1.0, tz / lanes);
+    streak.position.set(px, py + 1.3, -0.3);
+    const len = streak.position.distanceTo(streakTarget);
+    streak.scale.set(0.09, 0.09, len);
+    streak.lookAt(streakTarget);
+    streakMat.opacity = 0.9 * (1 - age / CONFIG.POWERUP_STREAK_TIME);
+  } else {
+    streak.visible = false;
+  }
 }
 
 function loop(now) {
@@ -983,6 +1183,16 @@ if (DEBUG) {
     dispatch,
     getHighScore: () => highScore,
     getShardTotal: () => shardTotal,
+    POWER,
+    givePower: (type) => applyPower(run.powerups, type, CONFIG), // smoke tests: skip waiting for a pickup
+    // Put a pickup `ahead` units in front of the player, in `lane`.
+    placePower: (type, lane, ahead) => {
+      const o = run.powerups.slots.find((x) => !x.active);
+      if (!o) return false;
+      Object.assign(o, { active: true, type, lane, s: run.scroll + ahead });
+      run.powerups.active++;
+      return true;
+    },
     getGameOverAge: () => gameOverAge,
     getDifficulty: () => difficultyAt(run.scroll, CONFIG),
     // Jump the speed ramp (e.g. 220 → max speed). Rows already planned were

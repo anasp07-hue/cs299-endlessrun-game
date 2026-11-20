@@ -22,4 +22,10 @@ export const PALETTE = Object.freeze({
   hazardAmber: '#ffb020', // LOW obstacle cue
   sparkWhite: '#fff4c2', // HIGH obstacle cue
   dangerRed: '#ff3344', // BLOCK obstacle cue, "CAUGHT"
+  // Power-ups (Round 4, SPEC §3.8): gameplay pickups, so brighter than set
+  // dressing, but kept away from the obstacle cues (amber / white / red) and
+  // the shards' glowBlue, and a little softened (not pure neon).
+  powerBazooka: '#e86ac8', // rose-magenta
+  powerDouble: '#b6e85a', // lime
+  powerPhase: '#b06cff', // purple-violet (deeper than glowBlue, so the two never read alike)
 });
