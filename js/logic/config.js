@@ -254,6 +254,10 @@ export const CONFIG = Object.freeze({
   SHARD_BOB: 0.07, // units up and down
   SHARD_STREAK_TIME: 0.6, // pickups closer together than this climb in pitch (one line)
 
+  // --- Character shop (Round 3, R7/R8; SPEC §4 Shop) ---
+  PRICE_ANDROID: 100, // shards (about 2–4 runs)
+  PRICE_ALIEN: 200,
+
   // --- Quality setting (Phase 8, ADR-0016) ---
   PIXEL_RATIO_MAX_LOW: 1, // LOW quality renders at 1 pixel per CSS pixel and drops dust + sparks
 

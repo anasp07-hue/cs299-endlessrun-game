@@ -1,10 +1,13 @@
 // Game state machine (SPEC §4, ADR-0008). Pure: no DOM, no THREE.
 //
-//  MENU ──PLAY──▶ PLAYING ◀──RESUME── PAUSED
-//                  │  ──PAUSE (Esc/P/blur)──▶
-//                  ▼ CAUGHT
-//              GAMEOVER ──PLAY──▶ PLAYING
-//                  └──MENU──▶ MENU
+//  SHOP ◀──SHOP── MENU ──PLAY──▶ PLAYING ◀──RESUME── PAUSED
+//   └──MENU (Back/Esc/P)──▶ ▲      │  ──PAUSE (Esc/P/blur)──▶
+//                           │      ▼ CAUGHT
+//                           │  GAMEOVER ──PLAY──▶ PLAYING
+//                           └──MENU──┘
+//
+// SHOP (Round 3, R7) is reached only from the menu, so the equipped
+// character can never change mid-run.
 //
 // game.js owns the side effects (overlays, resetRun, saving the high score);
 // this module only says which transitions are legal and what a key means in
@@ -17,6 +20,7 @@ export const STATE = Object.freeze({
   PLAYING: 'PLAYING',
   PAUSED: 'PAUSED',
   GAMEOVER: 'GAMEOVER',
+  SHOP: 'SHOP', // character shop (Round 3)
 });
 
 /** What the game should do in response to input or an event. */
@@ -32,11 +36,13 @@ export const CMD = Object.freeze({
   JUMP: 'JUMP',
   SLIDE: 'SLIDE',
   MUTE: 'MUTE', // toggle sound; never changes state (game.js handles it directly)
+  SHOP: 'SHOP', // open the character shop from the menu (Round 3)
 });
 
 // Legal transitions: TRANSITIONS[from][cmd] = to. Anything missing is ignored.
 const TRANSITIONS = Object.freeze({
-  [STATE.MENU]: Object.freeze({ [CMD.PLAY]: STATE.PLAYING }),
+  [STATE.MENU]: Object.freeze({ [CMD.PLAY]: STATE.PLAYING, [CMD.SHOP]: STATE.SHOP }),
+  [STATE.SHOP]: Object.freeze({ [CMD.MENU]: STATE.MENU }), // Back
   [STATE.PLAYING]: Object.freeze({
     [CMD.PAUSE]: STATE.PAUSED,
     [CMD.CAUGHT]: STATE.GAMEOVER,
@@ -72,6 +78,8 @@ export function startsNewRun(from, cmd) {
  * - MENU: Enter / Space → Play.
  * - PLAYING: movement keys move; Esc / P pause.
  * - PAUSED: Esc / P / Enter resume. Movement keys do nothing.
+ * - SHOP: Esc / P → back to the menu. Enter / Space do nothing on their own
+ *   (a focused shop button handles them), so a stray key can't start a run.
  * - GAMEOVER: Enter / Space → Play Again, but only once `gameOverAge` (seconds
  *   since the run ended) reaches GAMEOVER_INPUT_DELAY, so a jump that was
  *   being mashed as you got caught can't instantly restart the run.
@@ -93,6 +101,8 @@ export function commandFor(state, action, gameOverAge, cfg) {
       return CMD.NONE;
     case STATE.PAUSED:
       return action === ACTION.PAUSE || action === ACTION.CONFIRM ? CMD.RESUME : CMD.NONE;
+    case STATE.SHOP:
+      return action === ACTION.PAUSE ? CMD.MENU : CMD.NONE;
     case STATE.GAMEOVER:
       if (action !== ACTION.CONFIRM && action !== ACTION.JUMP) return CMD.NONE;
       return canRestart(gameOverAge, cfg) ? CMD.PLAY : CMD.NONE;

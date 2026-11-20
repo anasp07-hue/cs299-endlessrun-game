@@ -33,11 +33,13 @@ test('the SPEC §4 transitions are exactly the legal ones', () => {
     'GAMEOVER -MENU-> MENU',
     'GAMEOVER -PLAY-> PLAYING',
     'MENU -PLAY-> PLAYING',
+    'MENU -SHOP-> SHOP', // Round 3 (R7): the character shop
     'PAUSED -MENU-> MENU',
     'PAUSED -PLAY-> PLAYING',
     'PAUSED -RESUME-> PLAYING',
     'PLAYING -CAUGHT-> GAMEOVER',
     'PLAYING -PAUSE-> PAUSED',
+    'SHOP -MENU-> MENU', // Round 3 (R7): Back
   ]);
 });
 

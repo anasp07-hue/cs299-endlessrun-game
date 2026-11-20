@@ -66,3 +66,20 @@ export function bankRunShards(storage, total, run) {
   saveShardTotal(storage, next);
   return next;
 }
+
+/**
+ * Spend `price` shards from the lifetime total (Round 3 shop, R7/R10) and
+ * save the new total at once. Like banking, it starts from the larger of the
+ * in-memory and stored totals, so another tab's shards aren't lost. Returns
+ * { ok, total }: ok is false (and nothing is written) when the total can't
+ * cover the price or the price isn't a positive whole number. Called only
+ * from a shop click, never per frame.
+ */
+export function spendShards(storage, total, price) {
+  const stored = loadShardTotal(storage);
+  const base = stored > total ? stored : total;
+  if (!Number.isInteger(price) || price <= 0 || base < price) return { ok: false, total: base };
+  const next = base - price;
+  saveShardTotal(storage, next); // without storage the spend still holds for this session
+  return { ok: true, total: next };
+}
