@@ -1,4 +1,7 @@
 // Apocalypse Run — browser entry point.
+// Round 2: a lifetime shard total (js/logic/shardbank.js) saved under
+// neonWasteland.shardTotal, banked on run end, abandon, and page hide/close,
+// and shown on the menu and game-over screens (docs/decisions/0001).
 // Phase 8: data-shard collectibles (js/logic/shards.js: glowing diamonds laid
 // between obstacle rows, bonus points, a HUD counter) and a LOW / HIGH quality
 // setting (resolution + particles), saved with the other settings (ADR-0016).
@@ -54,6 +57,7 @@ import {
   STATE, CMD, nextState, startsNewRun, commandFor, shouldAutoPause, canRestart, abandonsRun,
 } from './js/logic/state.js';
 import { loadHighScore, saveHighScore, finalScore, isNewHighScore } from './js/logic/highscore.js';
+import { loadShardTotal, bankRunShards } from './js/logic/shardbank.js';
 import { writeDigits, DIGIT_STRINGS } from './js/logic/hud.js';
 import { PALETTE } from './js/palette.js';
 
@@ -195,6 +199,16 @@ try {
 }
 let highScore = loadHighScore(storage);
 const settings = loadSettings(storage); // { muted, quality }
+let shardTotal = loadShardTotal(storage); // lifetime shards (Round 2, R4)
+
+/**
+ * Add this run's not-yet-banked shards to the lifetime total and save it.
+ * Called only at checkpoints (run end, abandon, page hide/close), never per
+ * frame; safe to call repeatedly (docs/decisions/0001).
+ */
+function bankShards() {
+  shardTotal = bankRunShards(storage, shardTotal, run);
+}
 
 // --- UI elements --------------------------------------------------------------
 const $ = (id) => document.getElementById(id);
@@ -205,6 +219,8 @@ const screens = {
 };
 const hud = $('hud');
 const menuBest = $('menu-best');
+const menuShards = $('menu-shards');
+const finalShardTotalEl = $('final-shard-total');
 const finalScoreEl = $('final-score');
 const finalBestEl = $('final-best');
 const newHighBadge = $('new-high');
@@ -309,7 +325,10 @@ function dispatch(cmd) {
   // blur), or Restart / Main Menu could skip the game-over screen.
   if (cmd === CMD.PAUSE && !acceptsInput(run)) return false;
 
-  if (abandonsRun(from, cmd)) commitHighScore(run.score); // before the reset wipes it
+  if (abandonsRun(from, cmd)) {
+    commitHighScore(run.score); // before the reset wipes it
+    bankShards(); // an abandoned run's shards still count
+  }
   if (startsNewRun(from, cmd)) {
     syncHighScore();
     resetRun(run, CONFIG, nextSeed());
@@ -325,6 +344,8 @@ function dispatch(cmd) {
   if (to === STATE.MENU) {
     syncHighScore();
     menuBest.textContent = String(highScore);
+    bankShards(); // nothing new after the reset, but picks up shards other tabs banked
+    menuShards.textContent = String(shardTotal);
   }
 
   state = to;
@@ -342,6 +363,8 @@ function onRunEnded() {
   finalScoreEl.textContent = String(final);
   finalBestEl.textContent = String(highScore);
   finalShardsEl.textContent = String(run.shardCount);
+  bankShards();
+  finalShardTotalEl.textContent = String(shardTotal);
   newHighBadge.hidden = !isNew;
 
   if (DEBUG) {
@@ -434,9 +457,14 @@ function autoPause() {
 }
 window.addEventListener('blur', autoPause);
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) autoPause();
+  if (document.hidden) {
+    autoPause();
+    bankShards(); // the tab may never come back (mobile/Safari may not fire pagehide)
+  }
   audio.setHidden(document.hidden); // no music piling up in a background tab
 });
+// Closing or leaving the page mid-run keeps the shards collected so far (R4).
+window.addEventListener('pagehide', () => bankShards());
 
 // --- Audio (js/audio.js, ADR-0015) --------------------------------------------
 // Created now, but silent until the first click or key press (browser autoplay rules).
@@ -841,6 +869,7 @@ function loop(now) {
 
 showScreens(state);
 menuBest.textContent = String(highScore);
+menuShards.textContent = String(shardTotal);
 renderer.setAnimationLoop(loop);
 
 // --- Debug (dev only): ?debug exposes internals for smoke tests -------------
@@ -851,6 +880,7 @@ if (DEBUG) {
     getState: () => state,
     dispatch,
     getHighScore: () => highScore,
+    getShardTotal: () => shardTotal,
     getGameOverAge: () => gameOverAge,
     getDifficulty: () => difficultyAt(run.scroll, CONFIG),
     // Jump the speed ramp (e.g. 220 → max speed). Rows already planned were
