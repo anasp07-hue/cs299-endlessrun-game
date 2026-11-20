@@ -43,6 +43,7 @@
         <h1 class="title">APOCALYPSE<span class="title-accent">RUN</span></h1>
         <p class="tagline">The city is dead. The Agent is not. Run.</p>
         <button id="btn-play" class="btn btn-primary" type="button">PLAY</button>
+        <button id="btn-shop" class="btn" type="button">SHOP</button>
         <p class="stat-line">HIGH SCORE <span id="menu-best" class="stat-value">0</span></p>
         <p class="stat-line">TOTAL SHARDS <span id="menu-shards" class="stat-value">0</span></p>
         <dl class="controls">
@@ -58,6 +59,18 @@
           <button id="btn-quality-menu" class="btn btn-small js-quality" type="button" title="LOW: lower resolution, no dust or sparks">QUALITY: HIGH</button>
         </div>
         <p class="hint">Press <kbd>Enter</kbd> or <kbd>Space</kbd> to play</p>
+      </div>
+    </div>
+
+    <!-- Shop (Round 3): cards are built by game.js; the equipped runner stands on the road beside the panel -->
+    <div id="shop" class="overlay screen screen-shop" hidden>
+      <div class="panel">
+        <h2 class="heading">SHOP</h2>
+        <p class="stat-line">SHARDS <span class="stat-value"><span class="shard-icon" aria-hidden="true"></span> <span id="shop-shards">0</span></span></p>
+        <ul id="shop-list" class="shop-list"></ul>
+        <p class="shop-note">Characters you buy last until you close the game. Spent shards stay spent.</p>
+        <button id="btn-shop-back" class="btn" type="button">BACK</button>
+        <p class="hint"><kbd>Esc</kbd> to go back</p>
       </div>
     </div>
 

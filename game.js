@@ -1,4 +1,9 @@
 // Apocalypse Run — browser entry point.
+// Round 3: a character shop (js/logic/shop.js, a SHOP state reached from the
+// menu) that spends the lifetime shard total on two new runners, the Android
+// and the Alien (js/characters.js). All three runners are built at startup on
+// the same skeleton; only the equipped one is shown. Ownership and the
+// equipped runner live only in memory (R10, docs/decisions/0002, 0003).
 // Round 2: a lifetime shard total (js/logic/shardbank.js) saved under
 // neonWasteland.shardTotal, banked on run end, abandon, and page hide/close,
 // and shown on the menu and game-over screens (docs/decisions/0001).
@@ -44,7 +49,10 @@ import {
   createPose, blendPose, advancePhase, standPose, hackerRun, hackerAir, hackerSlide,
   agentRun, agentAir, agentSlide, agentReach, hitWeight, hitOverlay,
 } from './js/logic/pose.js';
-import { createHacker, createAgent, applyPose } from './js/characters.js';
+import { RUNNER_BUILDERS, createAgent, applyPose } from './js/characters.js';
+import {
+  CHARACTER_IDS, CHARACTER_INFO, characterPrice, createShop, owns, canBuy, buyCharacter, equipCharacter,
+} from './js/logic/shop.js';
 import { createCity, makeRoadTexture, applySkyFog, softDotTexture } from './js/city.js';
 import { createAudio } from './js/audio.js';
 import { loadSettings, saveSettings, QUALITY, toggleQuality, qualityProfile } from './js/logic/settings.js';
@@ -120,9 +128,31 @@ const floor = new THREE.Mesh(
 floor.position.set(0, -0.02, CONFIG.GROUND_BACK_Z - CONFIG.FLOOR_SIZE / 2);
 scene.add(floor);
 
-// --- Characters: the Hacker (player) and the Agent (chaser), feet at y = 0 ---
-const hacker = createHacker();
-scene.add(hacker.root);
+// --- Characters: the runner (player) and the Agent (chaser), feet at y = 0 ---
+// Every runner the shop sells is built once, here, on the same skeleton; only
+// the equipped one is visible (hidden ones cost no draw calls). Switching
+// skins only flips visibility, so nothing is ever built mid-game (R8, R9).
+// The shop state is created fresh on every page load and never saved (R10).
+const shop = createShop();
+const runners = {};
+for (const id of CHARACTER_IDS) {
+  const r = RUNNER_BUILDERS[id]();
+  r.root.visible = false;
+  scene.add(r.root);
+  runners[id] = r;
+}
+let runner = runners[shop.equipped];
+runner.root.visible = true;
+
+/** Show the equipped runner (called from shop clicks only, never per frame). */
+function showRunner() {
+  const next = runners[shop.equipped];
+  if (next === runner) return;
+  next.root.position.copy(runner.root.position);
+  runner.root.visible = false;
+  runner = next;
+  runner.root.visible = true;
+}
 const agent = createAgent();
 agent.root.visible = false;
 scene.add(agent.root);
@@ -216,6 +246,7 @@ const screens = {
   [STATE.MENU]: $('menu'),
   [STATE.PAUSED]: $('pause'),
   [STATE.GAMEOVER]: $('gameover'),
+  [STATE.SHOP]: $('shop'),
 };
 const hud = $('hud');
 const menuBest = $('menu-best');
@@ -334,7 +365,8 @@ function dispatch(cmd) {
     resetRun(run, CONFIG, nextSeed());
   }
   if (cmd === CMD.PAUSE) freezeInterpolation(run); // pause shows the latest frame exactly
-  if (cmd === CMD.MENU) resetRun(run, CONFIG, nextSeed()); // menu shows a clean road
+  // Menu shows a clean road. Back from the shop keeps the road it already has.
+  if (cmd === CMD.MENU && from !== STATE.SHOP) resetRun(run, CONFIG, nextSeed());
   if (cmd === CMD.CAUGHT) onRunEnded();
   if (startsNewRun(from, cmd) || cmd === CMD.MENU) {
     resetCharacterView();
@@ -346,6 +378,10 @@ function dispatch(cmd) {
     menuBest.textContent = String(highScore);
     bankShards(); // nothing new after the reset, but picks up shards other tabs banked
     menuShards.textContent = String(shardTotal);
+  }
+  if (to === STATE.SHOP) {
+    bankShards(); // nothing new to bank; picks up shards other tabs banked
+    renderShop();
   }
 
   state = to;
@@ -450,6 +486,69 @@ for (const el of document.querySelectorAll('.js-mute')) {
   });
 }
 onClick('btn-over-menu', CMD.MENU);
+onClick('btn-shop', CMD.SHOP);
+onClick('btn-shop-back', CMD.MENU);
+
+// --- Shop (Round 3, R7–R10; SPEC §4 "Shop") -----------------------------------
+// One card per character, built once at startup; renderShop() only rewrites
+// text and flags. A purchase spends from the saved shard total at once (a
+// click, never per frame); ownership itself is never saved (R10).
+const shopShardsEl = $('shop-shards');
+const shopList = $('shop-list');
+const shopCards = {};
+for (const id of CHARACTER_IDS) {
+  const card = document.createElement('li');
+  card.className = 'shop-card';
+  card.dataset.character = id;
+  const info = document.createElement('div');
+  info.className = 'shop-info';
+  const name = document.createElement('span');
+  name.className = 'shop-name';
+  name.textContent = CHARACTER_INFO[id].name;
+  const blurb = document.createElement('span');
+  blurb.className = 'shop-blurb';
+  blurb.textContent = CHARACTER_INFO[id].blurb;
+  info.append(name, blurb);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn-small shop-btn';
+  btn.addEventListener('click', () => onShopButton(id));
+  card.append(info, btn);
+  shopList.appendChild(card);
+  shopCards[id] = { card, btn };
+}
+
+function onShopButton(id) {
+  if (state !== STATE.SHOP) return;
+  if (owns(shop, id)) {
+    equipCharacter(shop, id);
+    audio.click();
+  } else {
+    const r = buyCharacter(shop, id, storage, shardTotal, CONFIG);
+    shardTotal = r.total;
+    if (r.ok) audio.shard(4); // the shard chime, high: a purchase
+    else audio.click();
+  }
+  showRunner();
+  renderShop();
+}
+
+/** Refresh the shard total and every card's button (on entering the shop and after each click). */
+function renderShop() {
+  shopShardsEl.textContent = String(shardTotal);
+  for (const id of CHARACTER_IDS) {
+    const { card, btn } = shopCards[id];
+    const owned = owns(shop, id);
+    const equipped = shop.equipped === id;
+    card.classList.toggle('is-equipped', equipped);
+    card.classList.toggle('is-locked', !owned && !canBuy(shop, id, shardTotal, CONFIG));
+    if (equipped) btn.textContent = 'EQUIPPED';
+    else if (owned) btn.textContent = 'EQUIP';
+    else btn.textContent = `BUY ${characterPrice(id, CONFIG)}`;
+    btn.disabled = equipped || (!owned && !canBuy(shop, id, shardTotal, CONFIG));
+    btn.setAttribute('aria-label', `${CHARACTER_INFO[id].name}: ${btn.textContent}`);
+  }
+}
 
 // Auto-pause when the tab or window loses focus, but only mid-run (SPEC §4).
 function autoPause() {
@@ -475,6 +574,7 @@ const MUSIC_DUCK = {
   [STATE.PLAYING]: 1,
   [STATE.PAUSED]: 0.25,
   [STATE.GAMEOVER]: 0.4,
+  [STATE.SHOP]: 0.55,
 };
 audio.setDuck(MUSIC_DUCK[STATE.MENU]);
 function unlockAudio() {
@@ -640,7 +740,7 @@ function renderFx(s, dt) {
   if (sparks.enabled) uploadSparks();
 
   squashScale(fx.landAge, fx.landStrength, CONFIG, squash);
-  hacker.root.scale.set(squash.xz, squash.y, squash.xz);
+  runner.root.scale.set(squash.xz, squash.y, squash.xz);
 
   const o = nearMissFlash(fx.flashAge, CONFIG);
   if (o !== fx.flashShown) {
@@ -712,7 +812,7 @@ window.addEventListener('resize', onResize);
 // --- Character animation (view only; poses from js/logic/pose.js) -------------
 // Scratch poses and blend weights, allocated once. None of this is run state:
 // it only decides how the characters look, never what happens.
-const hackerPose = createPose();
+const runnerPose = createPose();
 const agentPose = createPose();
 const tmpPose = createPose();
 const trailSample = { x: 0, y: 0, slide: 0 };
@@ -734,28 +834,29 @@ function updateCharacters(px, py, alpha, dt) {
   const caught = c.catching || run.caught;
   const live = state === STATE.PLAYING; // paused / game over: hold the last frame
   const rate = CONFIG.POSE_BLEND_RATE;
+  const atMenu = state === STATE.MENU || state === STATE.SHOP;
 
-  // Hacker
-  hacker.root.position.set(px, py, 0);
-  if (state === STATE.MENU) {
-    standPose(hackerPose);
+  // Runner (whichever skin is equipped: same rig, same poses)
+  runner.root.position.set(px, py, 0);
+  if (atMenu) {
+    standPose(runnerPose);
   } else {
     const t = live && !caught ? dt : 0; // frozen in place during the catch beat
     anim.hackerPhase = advancePhase(anim.hackerPhase, run.speed, t, CONFIG);
     anim.airW = damp(anim.airW, p.grounded ? 0 : 1, rate, t);
     anim.slideW = damp(anim.slideW, p.sliding ? 1 : 0, rate, t);
-    hackerRun(hackerPose, anim.hackerPhase);
-    if (anim.airW > 0.001) blendPose(hackerPose, hackerAir(tmpPose, p.vy / JUMP_V0), anim.airW);
-    if (anim.slideW > 0.001) blendPose(hackerPose, hackerSlide(tmpPose), anim.slideW);
-    hitOverlay(hackerPose, hitWeight(c.hitAge, CONFIG, caught), c.stumbleDir);
+    hackerRun(runnerPose, anim.hackerPhase);
+    if (anim.airW > 0.001) blendPose(runnerPose, hackerAir(tmpPose, p.vy / JUMP_V0), anim.airW);
+    if (anim.slideW > 0.001) blendPose(runnerPose, hackerSlide(tmpPose), anim.slideW);
+    hitOverlay(runnerPose, hitWeight(c.hitAge, CONFIG, caught), c.stumbleDir);
   }
-  applyPose(hacker, hackerPose);
+  applyPose(runner, runnerPose);
 
   // Agent: gap units behind (toward the camera), running the Hacker's path
   // from gap/speed seconds ago, so he jumps, slides, and dodges what the
   // Hacker just did. Hidden while he's behind the camera.
   const gap = lerp(c.prevGap, c.gap, alpha);
-  agent.root.visible = state !== STATE.MENU && agentInView(gap, CONFIG);
+  agent.root.visible = !atMenu && agentInView(gap, CONFIG);
   if (!agent.root.visible) return;
   // Sample the path at the player's interpolated time (one step behind the newest sample, plus alpha).
   sampleTrail(run.trail, chaserDelaySteps(gap, run.speed, CONFIG) + (1 - alpha), trailSample);
@@ -875,7 +976,8 @@ renderer.setAnimationLoop(loop);
 // --- Debug (dev only): ?debug exposes internals for smoke tests -------------
 if (DEBUG) {
   window.__neon = {
-    THREE, renderer, scene, camera, run, hacker, agent, roadSegments, city, debug, CMD, STATE,
+    THREE, renderer, scene, camera, run, runners, shop, agent, roadSegments, city, debug, CMD, STATE,
+    getRunner: () => runner,
     audio, settings, shake, sparks, fx, shardMesh, applyQuality,
     getState: () => state,
     dispatch,

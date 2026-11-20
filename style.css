@@ -357,6 +357,96 @@ body {
   color: var(--glow-pale);
 }
 
+/* --- Shop (Round 3) ----------------------------------------------------------
+   The panel sits to the left on wide screens so the equipped runner, standing
+   on the road in the middle, stays visible as a preview. */
+.screen-shop {
+  justify-content: flex-start;
+  padding-left: max(16px, 7vw);
+}
+
+@media (max-width: 820px) {
+  .screen-shop {
+    justify-content: center;
+    padding-left: 16px;
+  }
+}
+
+.shop-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shop-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(127, 182, 230, 0.02);
+  text-align: left;
+}
+
+.shop-card.is-equipped {
+  border-color: var(--line-strong);
+  background: rgba(127, 182, 230, 0.08);
+}
+
+.shop-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.shop-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--glow-pale);
+}
+
+.shop-blurb {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.shop-card.is-locked .shop-name {
+  color: var(--text-dim);
+}
+
+.shop-btn {
+  flex: none;
+  min-width: 104px;
+}
+
+.shop-card.is-equipped .shop-btn {
+  color: var(--glow-blue);
+}
+
+.btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.btn:disabled:hover {
+  border-color: var(--line);
+  background: rgba(127, 182, 230, 0.03);
+}
+
+.shop-card.is-equipped .shop-btn:disabled {
+  opacity: 1;
+}
+
+.shop-note {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
 /* --- Near-miss flicker ------------------------------------------------------ */
 #flash {
   position: fixed;
