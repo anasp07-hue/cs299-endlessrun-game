@@ -77,7 +77,8 @@ endless-runner/
 │   └── palette.js      # Color palette (mirrored as CSS vars in style.css)
 ├── tests/              # node --test 'tests/*.test.js'  (Node built-in runner, dev-only — see ADR-0002, ADR-0004)
 ├── docs/
-│   ├── adr/            # Architecture Decision Records
+│   ├── adr/            # Architecture Decision Records (Phases 0–8: ADR-0001…0016)
+│   ├── decisions/      # Decision records from Round 2 on, as Y-statements (0001…)
 │   └── handoffs/       # Session/phase handoff notes
 ├── CLAUDE.md           # Working rules for Claude Code
 ├── .gitignore          # Includes secrets (.env, keys) — never commit them
@@ -378,10 +379,10 @@ Requirements R4–R6 (§1). Decision record: `docs/decisions/0001-bank-shards-at
 - Pure `js/logic/shardbank.js`: parse/load/save the total under `neonWasteland.shardTotal`, and `bankRunShards()` which banks only a run's not-yet-banked shards.
 - `run.shardsBanked` tracks what has been banked; `resetRun()` resets it.
 - `game.js` banks on catch, on abandon from pause, and on `pagehide` / tab hidden; the menu and game-over screens show the total.
-- **Acceptance:**
-  - [ ] R4: shards collected in a run are added to a lifetime total that survives a reload / browser restart; the menu and game-over screens show it; no shard is counted twice; garbage or missing storage reads as 0 and the game still runs without storage
-  - [ ] R5: still runs from `python3 serve.py` with no network, no build step, and no new files outside the repo
-  - [ ] R6: all earlier tests still pass; the run simulation (scores, shards, obstacle sequence) is unchanged; no storage writes during play except on hide/close; still 60 fps at max speed
+- **Acceptance:** *(verified 2026-11-19: `node --test` 265/265; headless Chrome over CDP on `serve.py`, `?debug&seed=4`, 17/17 smoke checks)*
+  - [x] R4: shards collected in a run are added to a lifetime total that survives a reload / browser restart; the menu and game-over screens show it; no shard is counted twice; garbage or missing storage reads as 0 and the game still runs without storage *(browser: 100 pre-saved → +30 banked on tab hide → 145 at game over → +15 kept through a mid-run reload → +11 on pause → Main Menu)*
+  - [x] R5: still runs from `python3 serve.py` with no network, no build step, and no new files outside the repo *(every browser request was to localhost; tests walk the module graph and scan for network APIs)*
+  - [x] R6: all earlier tests still pass; the run simulation (scores, shards, obstacle sequence) is unchanged; no storage writes during play except on hide/close; still 60 fps at max speed *(246 earlier tests pass; 0 `setItem` calls during 15 s of play; 60.1 fps at speed 35 on HIGH and LOW, 96–98 draw calls; zero console errors/warnings)*
 
 ---
 
