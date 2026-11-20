@@ -16,6 +16,18 @@ See `problem.md` for the motivation: something fun to play when you have no wifi
 | **Replayable** | Persistent high score, instant "Play Again", score readout during the run. |
 | **Simple to work on** | Built one phase at a time (section 9). Every phase leaves the game in a playable state. |
 
+### Requirements (from `problem.md`)
+IDs added in Round 2 so tests can name the requirement they check. `problem.md` itself is left as written.
+
+| ID | Round | Requirement | Where it's met |
+|---|---|---|---|
+| **R1** | 1 | Runs completely offline; lightweight; all logic runs locally in the browser of any modern computer | §1 Offline-first / Lightweight, §7.3 |
+| **R2** | 1 | Actually fun and enjoyable | §3, §5 |
+| **R3** | 1 | Has things that make you want to keep playing, like a high score | §3.7, §4 High score persistence |
+| **R4** | 2 | Shards are saved after closing the game, the way the high score is: a **lifetime shard total** kept across runs and browser restarts | §3.7, §4 Shard total persistence |
+| **R5** | 2 | The game still runs completely offline with no build step | §1, §2, §6 |
+| **R6** | 2 | Nothing else breaks, and runs are still smooth (60 fps, no per-frame allocations or storage writes) | §7.3, §9 Round 2 |
+
 ### Non-goals
 - Multiplayer, accounts, online leaderboards
 - Build tools (Vite, webpack), TypeScript, npm packages
@@ -53,6 +65,7 @@ endless-runner/
 │   │   ├── highscore.js # High-score parsing and load/save through an injected storage
 │   │   ├── settings.js # Settings (mute, quality) parsing and load/save under neonWasteland.settings (ADR-0015, ADR-0016)
 │   │   ├── shards.js   # Data-shard placement between rows, pickup, pool (ADR-0016)
+│   │   ├── shardbank.js # Lifetime shard total: parsing, load/save, banking a run's shards (Round 2, docs/decisions/0001)
 │   │   ├── juice.js    # Camera-shake trauma, landing squash, near-miss flash (ADR-0015)
 │   │   ├── particles.js # Pooled spark particles (ADR-0015)
 │   │   └── hud.js      # Allocation-free digit writer for the HUD
@@ -161,6 +174,7 @@ Exact rules (ADR-0011):
 ### 3.7 Scoring
 - Score = distance traveled, multiplied by a slowly rising multiplier.
 - **Data shards** (Phase 8, ADR-0016): glowing blue diamonds in short lines (3–5, 2.2 apart) in the open stretch between two obstacle rows. About half the gaps get a line, in a lane that isn't BLOCKed in the next row (preferably one open in both rows). Each shard is worth **25 × the current multiplier**. They sit at waist height (y 0.45–1.25): running or sliding through collects them, jumping over misses them. They are always optional: they never overlap an obstacle (each is kept a full row margin clear) and use their own seeded RNG, so the obstacle sequence and its fairness are unchanged. The HUD and the game-over screen show the shard count.
+- **Lifetime shard total** (Round 2, R4): every shard collected is added to a saved total that survives closing the browser, the same way the high score does. The menu shows the total; the game-over screen shows this run's shards and the new total. The total is only a running count: it doesn't change the score and nothing spends it (yet).
 
 ---
 
@@ -178,16 +192,22 @@ All UI is HTML/CSS layered on top of the canvas (not drawn in three.js). It uses
 
 | Screen | Contents |
 |---|---|
-| **Main menu** | Title, **Play** button (also `Enter`/`Space`), current high score, controls cheat-sheet, **Sound on/off** toggle (also `M`), **Quality high/low** toggle |
+| **Main menu** | Title, **Play** button (also `Enter`/`Space`), current high score, lifetime shard total, controls cheat-sheet, **Sound on/off** toggle (also `M`), **Quality high/low** toggle |
 | **HUD** (while playing) | Score (top-left) with the shard count under it, high score (top-right; tracks the live score once you beat it), sound and pause buttons |
 | **Pause** | Dimmed overlay, **Resume** (also `Esc`/`P`/`Enter`), **Restart**, **Main Menu**, **Sound on/off**, **Quality high/low**. The game also auto-pauses when the tab or window loses focus, but only mid-run. |
-| **Game over** | "CAUGHT" heading, final score, shards collected, high score, a "NEW HIGH SCORE!" badge when earned, **Play Again** (also `Enter`/`Space`, after a 0.6 s delay so a mashed jump can't skip the screen), **Main Menu** |
+| **Game over** | "CAUGHT" heading, final score, shards collected this run, lifetime shard total, high score, a "NEW HIGH SCORE!" badge when earned, **Play Again** (also `Enter`/`Space`, after a 0.6 s delay so a mashed jump can't skip the screen), **Main Menu** |
 
 While paused, the game loop keeps rendering but stops simulating. The paused frame is frozen exactly, and leftover step time is dropped on resume, so nothing jumps. The key that starts or restarts a run never also counts as a jump. Every Play / Play Again / Restart / Main Menu runs one full `resetRun()` (ADR-0008).
 
 ### High score persistence
 - Stored in `localStorage` under the key `neonWasteland.highScore`, as a whole number. Saved only when strictly beaten. Missing or garbage values read as 0.
 - Every `localStorage` read/write is wrapped in `try/catch`. If storage is unavailable (private mode), the game still works and just doesn't keep the score.
+
+### Shard total persistence (Round 2, R4)
+- Stored in `localStorage` under the key `neonWasteland.shardTotal`, as a whole number, using the same parsing rules as the high score (plain digits only; missing or garbage values read as 0; capped at `Number.MAX_SAFE_INTEGER`).
+- A run's shards are **banked** (added to the total and written) at a few checkpoints, never per frame: when the run ends (caught), when it's abandoned from the pause screen (Restart / Main Menu), and when the page is hidden or closed mid-run, so closing the tab doesn't lose them. The run remembers how many of its shards are already banked, so no shard is ever counted twice.
+- Banking re-reads the stored total first and adds to the larger of it and the in-memory total, so a second tab's shards aren't overwritten, and a session without storage still keeps its total in memory.
+- Same `try/catch` rule as the high score: without storage the game works and the total lasts for the session only.
 
 ### Settings
 - Saved as JSON under `neonWasteland.settings`: `{ "muted": bool, "quality": "high" | "low" }`. Unknown or invalid values fall back to the defaults (sound on, quality high), and a Phase 7 save without `quality` still loads.
@@ -352,6 +372,16 @@ Scope chosen by the user (2026-11-18): **data shards and the quality setting onl
   - [x] Shards appear in lines between rows, never on an obstacle, and never change the obstacle sequence; running or sliding through collects them, jumping over misses them; each is worth 25 × the multiplier; the HUD and game-over screen show the count, and it resets with the run
   - [x] Quality LOW/HIGH from the menu and pause screens: LOW drops resolution to 1 pixel per CSS pixel and turns off dust and sparks; saved and restored across reloads
   - [x] Still 60 fps at max speed at both quality levels (60.1 HIGH / 60.0 LOW, about 102 draw calls)
+
+### Round 2: Persistent shards
+Requirements R4–R6 (§1). Decision record: `docs/decisions/0001-bank-shards-at-checkpoints.md`.
+- Pure `js/logic/shardbank.js`: parse/load/save the total under `neonWasteland.shardTotal`, and `bankRunShards()` which banks only a run's not-yet-banked shards.
+- `run.shardsBanked` tracks what has been banked; `resetRun()` resets it.
+- `game.js` banks on catch, on abandon from pause, and on `pagehide` / tab hidden; the menu and game-over screens show the total.
+- **Acceptance:**
+  - [ ] R4: shards collected in a run are added to a lifetime total that survives a reload / browser restart; the menu and game-over screens show it; no shard is counted twice; garbage or missing storage reads as 0 and the game still runs without storage
+  - [ ] R5: still runs from `python3 serve.py` with no network, no build step, and no new files outside the repo
+  - [ ] R6: all earlier tests still pass; the run simulation (scores, shards, obstacle sequence) is unchanged; no storage writes during play except on hide/close; still 60 fps at max speed
 
 ---
 
