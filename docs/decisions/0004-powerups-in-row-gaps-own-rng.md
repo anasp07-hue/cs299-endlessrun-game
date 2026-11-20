@@ -1,6 +1,6 @@
 # 0004: Place power-ups in the gaps between rows, on a random timer, with their own RNG
 
-- **Status:** Accepted
+- **Status:** Accepted. Its timing (a random 35–65 s, counted from placement) is superseded by `0006-powerup-every-30s-by-arrival.md`; placement, the own RNG, and the rest still hold.
 - **Date:** 2026-11-19
 - **Round:** 4 (requirements R11, R14, R15, R16 in SPEC §1)
 - **Format:** Y-statement (see 0001).
