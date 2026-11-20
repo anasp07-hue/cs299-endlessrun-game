@@ -10,3 +10,9 @@ Round 2 Requirements
 - Shards save after closing like how the high score does
 - Game can still run completly offline with no build phase
 - Nothing else breaks and runs are still smooth
+
+Round 3 Requirements
+- Add a simple shop where we can buy characters with the saved shards
+- 2 new characters a silver robot/andriod character and a green alien
+- Same movement and hitbox & nothing breaks
+- Skins don't save
