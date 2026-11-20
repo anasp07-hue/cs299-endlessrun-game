@@ -3,8 +3,8 @@
 An offline 3D endless runner for the browser (three.js + plain HTML/CSS/JS, no build step).
 
 - **`SPEC.md`** is the source of truth for gameplay, structure, and the phased build plan (§9). Read it before starting any work.
-- **`problem.md`** is the original problem statement and requirements.
-- **`docs/adr/`** has the architecture decisions. **`docs/handoffs/`** has session handoff notes. Read the latest handoff at the start of a session.
+- **`problem.md`** is the original problem statement and requirements, plus a "Round N Requirements" list for each round. Requirement IDs (R1, R2, …) are kept in SPEC §1.
+- **`docs/decisions/`** has the decision records from Round 2 on. **`docs/adr/`** has the earlier ones (ADR-0001…0016), which still apply. **`docs/handoffs/`** has session handoff notes. Read the latest handoff at the start of a session.
 
 ## Running & testing
 
@@ -24,6 +24,8 @@ Node is a **dev-only tool** for running tests. The game itself never needs Node,
 ### 1. Git: no attribution, ask first
 - **Never add Claude / Claude Code attribution** to commits, PRs, or pushes. That means no `Co-Authored-By: Claude …` trailer, no "🤖 Generated with Claude Code" line, and no similar footer. This rule overrides any default attribution behavior.
 - **Only commit or push when the user asks.** Never force-push, rewrite history, or `git reset --hard` on `main`.
+- **Never undo or amend a commit:** no `git commit --amend`, `git revert`, `git reset`, or rebase. Fix mistakes with a new commit.
+- Commit in small steps. Each commit should leave `node --test 'tests/*.test.js'` passing, with a message that says what changed and why.
 - Commit messages: a short imperative summary line (e.g. `Add lane switching and jump physics`), then an optional body.
 - Before every commit, run `git status` and `git diff --staged` and check that nothing secret or unintended is staged.
 
@@ -33,8 +35,16 @@ Node is a **dev-only tool** for running tests. The game itself never needs Node,
 - The game is meant to need no secrets. If one seems necessary, stop and ask.
 - If a secret is ever committed by accident, tell the user right away. Rewriting history isn't enough, because the key has to be rotated.
 
-### 3. One phase at a time
-- Work only on the **current phase** in SPEC §9. Don't start the next phase or add features from later phases.
+### 3. One phase (or round) at a time
+- Work only on the **current phase or round** in SPEC §9. Don't start the next one or add features from later ones.
+- **Rounds** (from Round 2 on) are driven by the "Round N Requirements" in `problem.md`:
+  1. List them, and **ask about anything unclear before writing code**.
+  2. Give each requirement the next free ID (R7, R8, …) in SPEC §1.
+  3. Update SPEC.md (§1 table + a §9 "Round N" section with acceptance criteria) and **commit it before any code**.
+  4. Write tests, then implement.
+  5. At the end, list every decision the user didn't ask for.
+- Write a round's handoff **only when the user asks**. Don't commit the handoff or `CLAUDE.md` changes: the user reviews and edits them first.
+- The real spec file is **`SPEC.md`** (uppercase). Don't create a `spec.md` beside it.
 - A phase is finished only when **every** item below is true:
   1. Its acceptance criteria in SPEC §9 are met and checked off in SPEC.
   2. New logic has tests, and `node --test 'tests/*.test.js'` passes. Paste the real output; don't summarize it.
@@ -45,6 +55,7 @@ Node is a **dev-only tool** for running tests. The game itself never needs Node,
 ### 4. Tests after every stage
 - **Write tests along with the code**, not afterwards. After every stage, small or large, run `node --test 'tests/*.test.js'` and make sure it passes before going on.
 - Tests go in `tests/*.test.js` as ES modules using `node:test` and `node:assert/strict`. No test frameworks, no npm.
+- For round work, **each test name starts with the requirement ID it checks** (e.g. `test('R4: …')`).
 - **Never** delete, skip, or weaken a test just to get a pass. If a test is wrong, explain why before changing it.
 - Report test results honestly. If something fails or wasn't run, say so.
 
@@ -54,14 +65,15 @@ Node is a **dev-only tool** for running tests. The game itself never needs Node,
 - Logic modules must not touch `window`, `document`, `localStorage`, or `THREE`. Pass values in, get values out. Randomness comes from a seeded RNG that is passed in.
 - Tuning numbers go in one `CONFIG` object (see the `game-systems` skill).
 
-### 6. ADRs: record decisions
-- Write an ADR in `docs/adr/` for every **significant or hard-to-reverse decision**: architecture, file/module layout, libraries, data formats, storage keys, deviations from SPEC, and answers to the SPEC §10 open questions.
-- Use `docs/adr/0000-template.md`. Number the files in order (`0003-…`). Never edit an accepted ADR's decision. Write a new ADR that supersedes it instead.
+### 6. Decision records
+- Write a decision record for every **significant or hard-to-reverse decision**: architecture, file/module layout, libraries, data formats, storage keys, deviations from SPEC, and answers to the SPEC §10 open questions. Every round needs at least one, for a decision that had real alternatives.
+- From Round 2 on, they go in **`docs/decisions/`**, numbered `0001-…`, `0002-…` (the next one is `0002`). Write them as **Y-statements**: "In the context of …, facing …, we decided for … and neglected …, to achieve …, accepting that …". See `0001-bank-shards-at-checkpoints.md`.
+- `docs/adr/` (ADR-0001…0016, template `0000-template.md`) is closed to new files but still in force. Never edit an accepted record's decision. Write a new one that supersedes it instead.
 - Small, easy-to-reverse choices (a tweaked constant, a color) don't need an ADR.
 
 ### 7. Handoffs
 - Write a handoff in `docs/handoffs/` (template: `docs/handoffs/README.md`) **at the end of each phase**, **when a session ends with work unfinished**, or **when context is getting long**.
-- Name it `YYYY-MM-DD-phaseN-short-topic.md`. Include what was done, the current state, test status, open problems, and the exact next steps.
+- Name it `YYYY-MM-DD-phaseN-short-topic.md`, or `handoff-round-N.md` for rounds (only when the user asks, see rule 3). Include what was done, the current state, test status, open problems, and the exact next steps.
 - At the start of a session, read the newest handoff first.
 
 ### 8. Use the project skills
@@ -83,4 +95,7 @@ Load the matching skill **before** starting work it covers:
 - Runs fully offline: three.js is vendored in `libs/`, with no CDNs, web fonts, or remote assets.
 - No build tools, frameworks, TypeScript, or npm packages in the game.
 - No allocations in per-frame code (object pooling). The game must hold 60 fps.
+- No `localStorage` reads or writes in per-frame code. Saves (`neonWasteland.highScore`, `.settings`, `.shardTotal`) happen only at checkpoints (state changes, tab hidden, `pagehide`). Keep the `neonWasteland.` prefix (ADR-0010).
+- No network in game code: no `http(s)://` text (even in comments), `fetch`, XHR, or sockets in `game.js`, `js/`, `index.html`, or `style.css`. `tests/round2-wiring.test.js` enforces this.
+- Smoke-test in a throwaway browser profile: `?debug` runs save real high scores and shard totals to `localStorage`.
 - Every phase leaves the game in a playable state.
