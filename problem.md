@@ -16,3 +16,11 @@ Round 3 Requirements
 - 2 new characters a silver robot/andriod character and a green alien
 - Same movement and hitbox & nothing breaks
 - Skins don't save
+
+Round 4 Requiements
+- Add 3 power ups, a bazooka that destroys obstacles, double score, and phasing through obstacles
+- Bazooka has one shot that destroys the next row of obstacles
+- Double score and phase last for 30 seconds
+- They get picked up off the ground
+- Spawn is random but rare, they don't spawn a lot
+- Nothing breaks and powerups do what they are supposed to
