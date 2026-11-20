@@ -37,6 +37,7 @@ export const CMD = Object.freeze({
   SLIDE: 'SLIDE',
   MUTE: 'MUTE', // toggle sound; never changes state (game.js handles it directly)
   SHOP: 'SHOP', // open the character shop from the menu (Round 3)
+  FIRE: 'FIRE', // fire the held bazooka; never changes state (Round 4, R12)
 });
 
 // Legal transitions: TRANSITIONS[from][cmd] = to. Anything missing is ignored.
@@ -76,7 +77,7 @@ export function startsNewRun(from, cmd) {
 /**
  * What a key action means in the current state.
  * - MENU: Enter / Space → Play.
- * - PLAYING: movement keys move; Esc / P pause.
+ * - PLAYING: movement keys move; F fires the bazooka (Round 4); Esc / P pause.
  * - PAUSED: Esc / P / Enter resume. Movement keys do nothing.
  * - SHOP: Esc / P → back to the menu. Enter / Space do nothing on their own
  *   (a focused shop button handles them), so a stray key can't start a run.
@@ -97,6 +98,7 @@ export function commandFor(state, action, gameOverAge, cfg) {
       if (action === ACTION.RIGHT) return CMD.RIGHT;
       if (action === ACTION.JUMP) return CMD.JUMP;
       if (action === ACTION.SLIDE) return CMD.SLIDE;
+      if (action === ACTION.FIRE) return CMD.FIRE;
       if (action === ACTION.PAUSE) return CMD.PAUSE;
       return CMD.NONE;
     case STATE.PAUSED:

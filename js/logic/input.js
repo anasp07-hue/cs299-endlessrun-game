@@ -10,6 +10,7 @@ export const ACTION = Object.freeze({
   PAUSE: 'PAUSE', // Esc / P: toggle pause (SPEC §3.3)
   CONFIRM: 'CONFIRM', // Enter: Play / Play Again (Space also confirms on menus, via JUMP)
   MUTE: 'MUTE', // M: toggle sound, in any state (Phase 7)
+  FIRE: 'FIRE', // F: fire the held bazooka (Round 4, R12)
 });
 
 const KEY_TO_ACTION = Object.freeze({
@@ -27,6 +28,7 @@ const KEY_TO_ACTION = Object.freeze({
   Enter: ACTION.CONFIRM,
   NumpadEnter: ACTION.CONFIRM,
   KeyM: ACTION.MUTE,
+  KeyF: ACTION.FIRE,
 });
 
 /**

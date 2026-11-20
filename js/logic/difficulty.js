@@ -19,12 +19,15 @@ export function scoreMultiplier(distance, cfg) {
   return 1 + steps * cfg.SCORE_MULT_STEP;
 }
 
-/** Score after one step: distance covered this step × the current multiplier. */
-export function addScore(score, speed, dt, distance, cfg) {
-  return score + speed * dt * scoreMultiplier(distance, cfg);
+/**
+ * Score after one step: distance covered this step × the current multiplier,
+ * × `factor` (2 while double score is on; Round 4, R13).
+ */
+export function addScore(score, speed, dt, distance, cfg, factor = 1) {
+  return score + speed * dt * scoreMultiplier(distance, cfg) * factor;
 }
 
-/** Points for collecting `n` data shards at this distance (SHARD_POINTS each × the multiplier; ADR-0016). */
-export function shardScore(n, distance, cfg) {
-  return n * cfg.SHARD_POINTS * scoreMultiplier(distance, cfg);
+/** Points for collecting `n` data shards at this distance (SHARD_POINTS each × the multiplier × `factor`; ADR-0016). */
+export function shardScore(n, distance, cfg, factor = 1) {
+  return n * cfg.SHARD_POINTS * scoreMultiplier(distance, cfg) * factor;
 }

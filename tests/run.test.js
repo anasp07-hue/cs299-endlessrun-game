@@ -17,6 +17,7 @@ function snapshot(run) {
   plain.spawner.rngState = run.spawner.rng.getState();
   plain.spawner.rngSeed = run.spawner.rng.seed;
   plain.shards.rngState = run.shards.rng.getState(); // Phase 8: the shard RNG is run state too
+  plain.powerups.rngState = run.powerups.rng.getState(); // Round 4 (R16): so is the power-up RNG
   return plain;
 }
 

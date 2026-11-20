@@ -258,6 +258,21 @@ export const CONFIG = Object.freeze({
   PRICE_ANDROID: 100, // shards (about 2–4 runs)
   PRICE_ALIEN: 200,
 
+  // --- Power-ups (Round 4, R11–R16; SPEC §3.8, docs/decisions/0004) ---
+  // Pickups stand on the road between rows (like shards, with their own RNG,
+  // so obstacles and shards are unchanged). Run state only: never saved.
+  POWERUP_DURATION: 30, // seconds of double score / phase (R13)
+  POWERUP_INTERVAL_MIN: 35, // seconds of running before the first pickup, and between pickups...
+  POWERUP_INTERVAL_MAX: 65, // ...uniformly random in [MIN, MAX]: about one every 50 s (R15)
+  POWERUP_SCORE_MULT: 2, // double score: every point gained counts this many times
+  POWERUP_PHASE_GRACE: 1, // seconds: as phase ends, obstacles this close ahead (at current speed) are passed through too
+  POWERUP_HIT_W: 1.2, // pickup box (x)...
+  POWERUP_HIT_H: 1.0, // ...(y, from the road up: run or slide through it, jump over to miss it)...
+  POWERUP_HIT_D: 1.0, // ...(z)
+  MAX_POWERUPS: 4, // pooled pickups (rarely more than 1 on the road)
+  POWERUP_WARN_TIME: 3, // the HUD timer blinks for its last seconds
+  POWERUP_STREAK_TIME: 0.18, // seconds the bazooka's rocket streak stays on screen (view only)
+
   // --- Quality setting (Phase 8, ADR-0016) ---
   PIXEL_RATIO_MAX_LOW: 1, // LOW quality renders at 1 pixel per CSS pixel and drops dust + sparks
 

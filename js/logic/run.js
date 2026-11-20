@@ -15,6 +15,10 @@ import { trackNearMisses } from './spawner.js';
 import { createTrail, resetTrail, pushTrail } from './trail.js';
 import { speedAt, addScore, shardScore } from './difficulty.js';
 import { createShards, resetShards, updateShards, collectShards } from './shards.js';
+import {
+  createPowerups, resetPowerups, updatePowerups, collectPowerups, fireBazooka, scoreFactor, phasing,
+  tickPowerups, ghostAhead,
+} from './powerups.js';
 
 export function createRun(cfg, seed = 0) {
   const run = {
@@ -34,6 +38,7 @@ export function createRun(cfg, seed = 0) {
     shardCount: 0, // data shards collected this run (Phase 8)
     shardsBanked: 0, // how many of shardCount are already added to the lifetime total (Round 2, shardbank.js)
     shards: createShards(cfg, seed),
+    powerups: createPowerups(cfg, seed), // pickups, the bazooka, double-score and phase timers (Round 4)
     player: createPlayer(cfg),
     chaser: createChaser(cfg),
     trail: createTrail(cfg.TRAIL_STEPS), // the player's recent path, which the Agent follows
@@ -63,12 +68,14 @@ export function resetRun(run, cfg, seed) {
   run.shardCount = 0;
   run.shardsBanked = 0;
   resetShards(run.shards, cfg, seed);
+  resetPowerups(run.powerups, cfg, seed);
   resetPlayer(run.player, cfg);
   resetChaser(run.chaser, cfg);
   resetTrail(run.trail, run.player.x);
   resetSpawner(run.spawner, cfg, seed, 0);
   // Place the run-up line now, so it is there on the first frame (never pops in mid-view).
   updateShards(run.shards, run.spawner, 0, cfg);
+  updatePowerups(run.powerups, run.spawner, run.shards, 0, 0, cfg);
   const b = run.playerBox;
   b.minX = b.maxX = b.minY = b.maxY = b.minZ = b.maxZ = 0;
   const s = run.scratchBox;
@@ -112,7 +119,8 @@ export function stepRun(run, h, cfg, god = false) {
   run.speed = speedAt(run.elapsed, cfg);
   run.prevScroll = run.scroll;
   run.scroll += run.speed * h;
-  run.score = addScore(run.score, run.speed, h, run.scroll, cfg);
+  const pu = run.powerups;
+  run.score = addScore(run.score, run.speed, h, run.scroll, cfg, scoreFactor(pu, cfg));
   stepPlayer(run.player, h, cfg);
   pushTrail(run.trail, run.player.x, run.player.y, run.player.sliding);
   if (run.clipSlot >= 0 && !run.player.bouncing) {
@@ -123,20 +131,34 @@ export function stepRun(run, h, cfg, god = false) {
   }
   updateSpawner(run.spawner, run.scroll, run.speed, run.elapsed, cfg);
   updateShards(run.shards, run.spawner, run.scroll, cfg);
+  updatePowerups(pu, run.spawner, run.shards, run.scroll, run.elapsed, cfg);
   stepChaser(c, h, cfg);
 
   const p = run.player;
   const sp = run.spawner;
   setPlayerBox(run.playerBox, p, cfg);
+  if (pu.fireRequested) {
+    // F was pressed: the shot lands before the hit test, so it can save you (R12).
+    pu.fireRequested = false;
+    fireBazooka(pu, sp, run.playerBox, run.scroll, cfg, run.scratchBox);
+  }
   const first = findHit(sp, run.playerBox, run.scroll, cfg, run.scratchBox);
   if (god) {
     collect(run, cfg);
+    endStep(run, h, cfg);
     return first;
   }
 
   // The player box can overlap two obstacles at once mid-move (one in each
   // lane), so after a side clip look again: a head-on hit still counts.
+  // While phasing (R13), every obstacle touched is passed through instead.
   let hit = first;
+  if (phasing(pu)) {
+    for (let guard = 0; hit >= 0 && guard < sp.slots.length; guard++) {
+      sp.slots[hit].ignored = true;
+      hit = findHit(sp, run.playerBox, run.scroll, cfg, run.scratchBox);
+    }
+  }
   for (let guard = 0; hit >= 0 && guard < cfg.LANE_COUNT; guard++) {
     const o = sp.slots[hit];
     if (classifyHit(p, o.lane) !== HIT.SIDE_CLIP) {
@@ -164,14 +186,27 @@ export function stepRun(run, h, cfg, god = false) {
       run.nearMissLane = sp.slots[near].lane;
     }
   }
+  endStep(run, h, cfg);
   return first;
 }
 
 function collect(run, cfg) {
   const got = collectShards(run.shards, run.playerBox, run.scroll, cfg, run.scratchBox);
   if (got > 0) {
-    run.shardCount += got;
-    run.score += shardScore(got, run.scroll, cfg);
+    run.shardCount += got; // never doubled: double score is points only (R13)
+    run.score += shardScore(got, run.scroll, cfg, scoreFactor(run.powerups, cfg));
+  }
+  collectPowerups(run.powerups, run.playerBox, run.scroll, cfg, run.scratchBox);
+}
+
+/**
+ * Count the power-up timers down. If phase ran out on this step, everything
+ * less than POWERUP_PHASE_GRACE seconds ahead is passed through too, so a
+ * phase never ends with an unavoidable hit (R13).
+ */
+function endStep(run, h, cfg) {
+  if (tickPowerups(run.powerups, h)) {
+    ghostAhead(run.spawner, run.playerBox, run.scroll, run.speed * cfg.POWERUP_PHASE_GRACE, cfg, run.scratchBox);
   }
 }
 
