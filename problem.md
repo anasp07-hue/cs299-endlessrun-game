@@ -24,3 +24,9 @@ Round 4 Requiements
 - They get picked up off the ground
 - Spawn is random but rare, they don't spawn a lot
 - Nothing breaks and powerups do what they are supposed to
+
+Round 5 Requirments
+- Power ups are imbalanced make it so phase lasts 5 seconds
+- If you pick up a power up the next spawn won't be the same one
+- Make it so the skins you buy save after exiting, but they are now more      expensive
+-
