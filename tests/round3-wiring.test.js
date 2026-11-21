@@ -1,6 +1,7 @@
 // Round 3 wiring: game.js and index.html put the shop (R7) and the new
 // runners (R8) into the game, the skin stays cosmetic (R9), and nothing about
-// skins is ever saved (R10). Static checks over the source files, like
+// skins was ever saved (R10, replaced in Round 5 by R19: see
+// round5-wiring.test.js). Static checks over the source files, like
 // round2-wiring.test.js. See SPEC §1 (R7–R10), §4 "Shop".
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -36,7 +37,7 @@ test('R7: the menu has a Shop button, and the shop screen has the total, the lis
   const shop = html.slice(html.indexOf('id="shop"'));
   assert.match(html, /<div id="shop" class="overlay screen[^"]*" hidden>/, 'the shop starts hidden');
   for (const id of ['shop-shards', 'shop-list', 'btn-shop-back']) assert.match(shop, new RegExp(`id="${id}"`), id);
-  assert.match(shop, /close the game/i, 'the shop says purchases last only until the game is closed');
+  assert.match(shop, /class="shop-note"/, 'the shop has a note about purchases (its wording is checked under R19)');
 });
 
 test('R7: game.js wires the shop into the state machine and buys / equips through shop.js', () => {
@@ -45,7 +46,7 @@ test('R7: game.js wires the shop into the state machine and buys / equips throug
   assert.match(game, /onClick\('btn-shop', CMD\.SHOP\)/);
   assert.match(game, /onClick\('btn-shop-back', CMD\.MENU\)/);
   assert.match(game, /buyCharacter\(shop, id, storage, shardTotal, CONFIG\)/, 'buying spends the saved total');
-  assert.match(game, /equipCharacter\(shop, id\)/);
+  assert.match(game, /equipCharacter\(shop, id, storage\)/, 'equipping saves the choice (R19)');
   assert.match(game, /\[STATE\.SHOP\]: [\d.]+/, 'the music has a level for the shop');
 });
 
@@ -85,20 +86,7 @@ test('R9: per-frame code never touches the shop', () => {
   }
 });
 
-// --- R10 -----------------------------------------------------------------------
-
-test('R10: no skin is ever saved: only the three existing localStorage keys exist anywhere in game code', () => {
-  const keys = new Set();
-  for (const [f, src] of gameSources()) {
-    for (const m of src.matchAll(/neonWasteland\.(\w+)/g)) keys.add(m[1]);
-    assert.doesNotMatch(src, /sessionStorage|indexedDB|document\.cookie|caches\.open/, `${f} uses another kind of storage`);
-  }
-  assert.deepEqual([...keys].sort(), ['highScore', 'settings', 'shardTotal']);
-});
-
-test('R10: the shop is created fresh on every page load and never handed to a save function', () => {
-  assert.match(game, /const shop = createShop\(\);/);
-  for (const save of ['saveSettings', 'saveHighScore', 'saveShardTotal']) {
-    assert.doesNotMatch(game, new RegExp(`${save}\\([^)]*shop`), save);
-  }
-});
+// --- R10 (Round 3) was replaced by R19 in Round 5 ---------------------------------
+// R10's checks (only three storage keys; a fresh shop on every load, never
+// saved) are reversed by R19. Their replacements are in round5-wiring.test.js:
+// exactly four keys, the shop loaded from storage and saved only on a click.

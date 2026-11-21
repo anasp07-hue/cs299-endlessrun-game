@@ -1,9 +1,12 @@
 // Apocalypse Run — browser entry point.
+// Round 5: bought and equipped characters are saved under
+// neonWasteland.characters (R19, docs/decisions/0007), written by shop.js on a
+// shop click only; phase lasts 5 s and power-ups never repeat (R17, R18: logic).
 // Round 3: a character shop (js/logic/shop.js, a SHOP state reached from the
 // menu) that spends the lifetime shard total on two new runners, the Android
 // and the Alien (js/characters.js). All three runners are built at startup on
-// the same skeleton; only the equipped one is shown. Ownership and the
-// equipped runner live only in memory (R10, docs/decisions/0002, 0003).
+// the same skeleton; only the equipped one is shown (docs/decisions/0002, 0003;
+// Round 3 kept ownership in memory only (R10), which Round 5 replaced).
 // Round 2: a lifetime shard total (js/logic/shardbank.js) saved under
 // neonWasteland.shardTotal, banked on run end, abandon, and page hide/close,
 // and shown on the menu and game-over screens (docs/decisions/0001).
@@ -51,7 +54,7 @@ import {
 } from './js/logic/pose.js';
 import { RUNNER_BUILDERS, createAgent, applyPose } from './js/characters.js';
 import {
-  CHARACTER_IDS, CHARACTER_INFO, characterPrice, createShop, owns, canBuy, buyCharacter, equipCharacter,
+  CHARACTER_IDS, CHARACTER_INFO, characterPrice, loadShop, mergeStoredShop, owns, canBuy, buyCharacter, equipCharacter,
 } from './js/logic/shop.js';
 import { createCity, makeRoadTexture, applySkyFog, softDotTexture } from './js/city.js';
 import { createAudio } from './js/audio.js';
@@ -130,12 +133,22 @@ const floor = new THREE.Mesh(
 floor.position.set(0, -0.02, CONFIG.GROUND_BACK_Z - CONFIG.FLOOR_SIZE / 2);
 scene.add(floor);
 
+// --- Storage (SPEC §4): localStorage may be missing or throw (private mode) ---
+// Set up before the shop, which loads the saved characters from it (Round 5, R19).
+let storage = null;
+try {
+  storage = window.localStorage;
+} catch {
+  storage = null; // the game still works; it just won't remember the high score
+}
+
 // --- Characters: the runner (player) and the Agent (chaser), feet at y = 0 ---
 // Every runner the shop sells is built once, here, on the same skeleton; only
 // the equipped one is visible (hidden ones cost no draw calls). Switching
 // skins only flips visibility, so nothing is ever built mid-game (R8, R9).
-// The shop state is created fresh on every page load and never saved (R10).
-const shop = createShop();
+// Owned and equipped characters are loaded from storage (Round 5, R19,
+// docs/decisions/0007) and saved by shop.js on a shop click only.
+const shop = loadShop(storage);
 const runners = {};
 for (const id of CHARACTER_IDS) {
   const r = RUNNER_BUILDERS[id]();
@@ -291,13 +304,7 @@ const stepper = createFixedStepper(CONFIG.SIM_STEP, CONFIG.SIM_MAX_STEPS);
 let cameraX = 0;
 const debug = { god: false }; // ?debug only: god mode ignores hits
 
-// --- Persistence (SPEC §4): localStorage may be missing or throw (private mode) ---
-let storage = null;
-try {
-  storage = window.localStorage;
-} catch {
-  storage = null; // the game still works; it just won't remember the high score
-}
+// --- Persistence (SPEC §4): `storage` is set up near the top (the shop needs it); loads below ---
 let highScore = loadHighScore(storage);
 const settings = loadSettings(storage); // { muted, quality }
 let shardTotal = loadShardTotal(storage); // lifetime shards (Round 2, R4)
@@ -478,6 +485,7 @@ function dispatch(cmd) {
   }
   if (to === STATE.SHOP) {
     bankShards(); // nothing new to bank; picks up shards other tabs banked
+    mergeStoredShop(shop, storage); // ...and characters other tabs bought (R19)
     renderShop();
   }
 
@@ -587,10 +595,10 @@ onClick('btn-over-menu', CMD.MENU);
 onClick('btn-shop', CMD.SHOP);
 onClick('btn-shop-back', CMD.MENU);
 
-// --- Shop (Round 3, R7–R10; SPEC §4 "Shop") -----------------------------------
+// --- Shop (Round 3, R7–R9; Round 5, R19–R20; SPEC §4 "Shop") -----------------
 // One card per character, built once at startup; renderShop() only rewrites
 // text and flags. A purchase spends from the saved shard total at once (a
-// click, never per frame); ownership itself is never saved (R10).
+// click, never per frame); buying and equipping then save the characters (R19).
 const shopShardsEl = $('shop-shards');
 const shopList = $('shop-list');
 const shopCards = {};
@@ -619,7 +627,7 @@ for (const id of CHARACTER_IDS) {
 function onShopButton(id) {
   if (state !== STATE.SHOP) return;
   if (owns(shop, id)) {
-    equipCharacter(shop, id);
+    equipCharacter(shop, id, storage); // saves the choice (R19)
     audio.click();
   } else {
     const r = buyCharacter(shop, id, storage, shardTotal, CONFIG);

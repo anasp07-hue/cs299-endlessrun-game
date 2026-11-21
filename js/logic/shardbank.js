@@ -68,7 +68,7 @@ export function bankRunShards(storage, total, run) {
 }
 
 /**
- * Spend `price` shards from the lifetime total (Round 3 shop, R7/R10) and
+ * Spend `price` shards from the lifetime total (Round 3 shop, R7; spent shards stay spent) and
  * save the new total at once. Like banking, it starts from the larger of the
  * in-memory and stored totals, so another tab's shards aren't lost. Returns
  * { ok, total }: ok is false (and nothing is written) when the total can't

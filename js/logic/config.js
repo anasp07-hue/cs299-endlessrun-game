@@ -255,8 +255,9 @@ export const CONFIG = Object.freeze({
   SHARD_STREAK_TIME: 0.6, // pickups closer together than this climb in pitch (one line)
 
   // --- Character shop (Round 3, R7/R8; SPEC §4 Shop) ---
-  PRICE_ANDROID: 100, // shards (about 2–4 runs)
-  PRICE_ALIEN: 200,
+  // Round 5 (R20): 3× the Round 3 prices (100 / 200), now that skins are saved (R19).
+  PRICE_ANDROID: 300, // shards (about 6–12 runs)
+  PRICE_ALIEN: 600,
 
   // --- Power-ups (Round 4, R11–R16; SPEC §3.8, docs/decisions/0004) ---
   // Pickups stand on the road between rows (like shards, with their own RNG,

@@ -1,7 +1,8 @@
-// Round 3 logic: the character shop (R7), its two new characters (R8), and
-// "skins don't save" (R10): ownership and the equipped character live only in
-// memory, while the shards spent stay deducted from the saved total.
-// See SPEC §1 (R7–R10), §4 "Shop", docs/decisions/0002 and 0003.
+// Round 3 logic: the character shop (R7) and its two new characters (R8).
+// Round 3's "skins don't save" (R10) was replaced in Round 5 by R19 (skins are
+// saved), and the prices went up (R20): those tests are in round5-shop.test.js.
+// Amounts here are worked out from the CONFIG prices, so they hold at any price.
+// See SPEC §1 (R7–R10, R19–R20), §4 "Shop", docs/decisions/0002, 0003, 0007.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CONFIG } from '../js/logic/config.js';
@@ -9,9 +10,11 @@ import { ACTION } from '../js/logic/input.js';
 import { STATE, CMD, nextState, commandFor, startsNewRun, abandonsRun, shouldAutoPause } from '../js/logic/state.js';
 import { SHARD_TOTAL_KEY, loadShardTotal, spendShards, bankRunShards } from '../js/logic/shardbank.js';
 import {
-  CHARACTER, CHARACTER_IDS, CHARACTER_INFO, characterPrice, createShop, owns, canBuy, buyCharacter, equipCharacter,
-  isCharacter,
+  CHARACTER, CHARACTER_IDS, CHARACTER_INFO, CHARACTERS_KEY, characterPrice, createShop, owns, canBuy, buyCharacter,
+  equipCharacter, isCharacter,
 } from '../js/logic/shop.js';
+
+const P = CONFIG.PRICE_ANDROID;
 
 /** A localStorage stand-in backed by a Map, recording every write. */
 function fakeStorage(initial = {}) {
@@ -51,13 +54,13 @@ test('R7: a fresh shop owns and equips only the Hacker', () => {
 });
 
 test('R7: buying with enough shards spends exactly the price, saves the total, and equips the character', () => {
-  const storage = fakeStorage({ [SHARD_TOTAL_KEY]: '130' });
+  const storage = fakeStorage({ [SHARD_TOTAL_KEY]: String(P + 30) });
   const shop = createShop();
-  assert.equal(canBuy(shop, CHARACTER.ANDROID, 130, CONFIG), true);
-  const r = buyCharacter(shop, CHARACTER.ANDROID, storage, 130, CONFIG);
+  assert.equal(canBuy(shop, CHARACTER.ANDROID, P + 30, CONFIG), true);
+  const r = buyCharacter(shop, CHARACTER.ANDROID, storage, P + 30, CONFIG);
   assert.deepEqual(r, { ok: true, total: 30 });
   assert.equal(storage.raw(SHARD_TOTAL_KEY), '30');
-  assert.deepEqual(storage.writes, [SHARD_TOTAL_KEY], 'one write, to the shard total only');
+  assert.deepEqual(storage.writes, [SHARD_TOTAL_KEY, CHARACTERS_KEY], 'the shard total once, then the characters (R19)');
   assert.equal(owns(shop, CHARACTER.ANDROID), true);
   assert.equal(shop.equipped, CHARACTER.ANDROID);
 });
@@ -79,9 +82,9 @@ test('R7: an exact balance is enough; one shard short is not, and nothing change
 });
 
 test('R7: an owned character cannot be bought again, and the Hacker is never sold', () => {
-  const storage = fakeStorage({ [SHARD_TOTAL_KEY]: '500' });
+  const storage = fakeStorage({ [SHARD_TOTAL_KEY]: String(P + 400) });
   const shop = createShop();
-  assert.equal(buyCharacter(shop, CHARACTER.ANDROID, storage, 500, CONFIG).total, 400);
+  assert.equal(buyCharacter(shop, CHARACTER.ANDROID, storage, P + 400, CONFIG).total, 400);
   assert.equal(canBuy(shop, CHARACTER.ANDROID, 400, CONFIG), false);
   assert.deepEqual(buyCharacter(shop, CHARACTER.ANDROID, storage, 400, CONFIG), { ok: false, total: 400 });
   assert.deepEqual(buyCharacter(shop, CHARACTER.HACKER, storage, 400, CONFIG), { ok: false, total: 400 });
@@ -124,15 +127,15 @@ test('R7: the total never goes negative, and bad prices are refused', () => {
 test('R7: without storage (private mode / throwing) buying still works for the session', () => {
   for (const storage of [null, throwingStorage]) {
     const shop = createShop();
-    const r = buyCharacter(shop, CHARACTER.ANDROID, storage, 150, CONFIG);
+    const r = buyCharacter(shop, CHARACTER.ANDROID, storage, P + 50, CONFIG);
     assert.deepEqual(r, { ok: true, total: 50 });
     assert.equal(shop.equipped, CHARACTER.ANDROID);
   }
 });
 
 test('R7: shards banked after a purchase add on top of the spent total (no refund, no double count)', () => {
-  const storage = fakeStorage({ [SHARD_TOTAL_KEY]: '120' });
-  let total = 120;
+  const storage = fakeStorage({ [SHARD_TOTAL_KEY]: String(P + 20) });
+  let total = P + 20;
   total = buyCharacter(createShop(), CHARACTER.ANDROID, storage, total, CONFIG).total; // 20
   const run = { shardCount: 15, shardsBanked: 0 };
   total = bankRunShards(storage, total, run);
@@ -165,47 +168,22 @@ test('R7: in the shop Esc / P go back, M toggles sound, and Enter / Space / move
 
 // --- R8: two new characters, priced as the user chose ---------------------------
 
-test('R8: the Android (silver robot) costs 100 shards and the Alien (green alien) 200', () => {
-  assert.equal(CONFIG.PRICE_ANDROID, 100);
-  assert.equal(CONFIG.PRICE_ALIEN, 200);
-  assert.equal(characterPrice(CHARACTER.ANDROID, CONFIG), 100);
-  assert.equal(characterPrice(CHARACTER.ALIEN, CONFIG), 200);
+// The prices were 100 / 200 in Round 3; Round 5 raised them (R20, round5-shop.test.js).
+test('R8: the Android (silver robot) and the Alien (green alien) are for sale, the Alien for twice the price', () => {
+  assert.equal(characterPrice(CHARACTER.ANDROID, CONFIG), CONFIG.PRICE_ANDROID);
+  assert.equal(characterPrice(CHARACTER.ALIEN, CONFIG), CONFIG.PRICE_ALIEN);
+  assert.ok(CONFIG.PRICE_ANDROID > 0);
+  assert.equal(CONFIG.PRICE_ALIEN, 2 * CONFIG.PRICE_ANDROID);
   assert.equal(CHARACTER_INFO[CHARACTER.ANDROID].name, 'ANDROID');
   assert.equal(CHARACTER_INFO[CHARACTER.ALIEN].name, 'ALIEN');
 });
 
-// --- R10: skins don't save --------------------------------------------------------
+// --- R10 (Round 3) was replaced by R19 in Round 5 -----------------------------------
+// R10 said bought skins are lost on reload and no storage key is added. R19
+// reverses both: round5-shop.test.js checks that a reload keeps them (and that
+// the spend still stays deducted, which R10 also checked).
 
-test('R10: after a "reload" only the Hacker is owned and equipped, but the spend stays deducted', () => {
-  const storage = fakeStorage({ [SHARD_TOTAL_KEY]: '340' });
-  let total = loadShardTotal(storage);
-  const shop = createShop();
-  total = buyCharacter(shop, CHARACTER.ANDROID, storage, total, CONFIG).total;
-  total = buyCharacter(shop, CHARACTER.ALIEN, storage, total, CONFIG).total;
-  assert.equal(total, 40);
-  assert.equal(shop.equipped, CHARACTER.ALIEN);
-
-  // Reload: everything is rebuilt from storage alone.
-  const reloaded = createShop();
-  assert.equal(reloaded.equipped, CHARACTER.HACKER);
-  assert.equal(owns(reloaded, CHARACTER.ANDROID), false);
-  assert.equal(owns(reloaded, CHARACTER.ALIEN), false);
-  assert.equal(loadShardTotal(storage), 40, 'spent shards are not refunded');
-});
-
-test('R10: the shop never stores ownership or the equipped character: no new storage key', () => {
-  const storage = fakeStorage({ [SHARD_TOTAL_KEY]: '1000' });
-  const shop = createShop();
-  buyCharacter(shop, CHARACTER.ANDROID, storage, 1000, CONFIG);
-  buyCharacter(shop, CHARACTER.ALIEN, storage, 900, CONFIG);
-  equipCharacter(shop, CHARACTER.HACKER);
-  equipCharacter(shop, CHARACTER.ANDROID);
-  assert.deepEqual(storage.keys(), [SHARD_TOTAL_KEY]);
-  assert.ok(storage.writes.every((k) => k === SHARD_TOTAL_KEY));
-  assert.equal(storage.writes.length, 2, 'one write per purchase, none for equipping');
-});
-
-test('R10: two separate shops (two sessions) do not share ownership', () => {
+test('R7: two separate shop objects do not share ownership in memory', () => {
   const a = createShop();
   buyCharacter(a, CHARACTER.ALIEN, null, 999, CONFIG);
   const b = createShop();
