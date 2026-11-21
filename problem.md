@@ -29,4 +29,11 @@ Round 5 Requirments
 - Power ups are imbalanced make it so phase lasts 5 seconds
 - If you pick up a power up the next spawn won't be the same one
 - Make it so the skins you buy save after exiting, but they are now more      expensive
--
+
+Round 6 Requirements
+- Add some voicelines for the agent
+- Should sound like a middle aged man
+- Triggered at the start of the run, on stumble, and when caught
+- Each thing should have 3-5 unique voice lines
+- Easy way to hear each one
+- Nothing external make it the same way you made the sfx
