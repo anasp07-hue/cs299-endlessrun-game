@@ -28,15 +28,19 @@ IDs added in Round 2 so tests can name the requirement they check. `problem.md` 
 | **R5** | 2 | The game still runs completely offline with no build step | §1, §2, §6 |
 | **R6** | 2 | Nothing else breaks, and runs are still smooth (60 fps, no per-frame allocations or storage writes) | §7.3, §9 Round 2 |
 | **R7** | 3 | A simple shop where you buy characters with the saved (lifetime) shards | §3.7, §4 Shop, §9 Round 3 |
-| **R8** | 3 | Two new characters: a silver robot/android (**Android**, 100 shards) and a green alien (**Alien**, 200 shards) | §5 Characters, §9 Round 3 |
+| **R8** | 3 | Two new characters: a silver robot/android (**Android**) and a green alien (**Alien**). Priced 100 / 200 shards in Round 3, **300 / 600 since Round 5 (R20)** | §5 Characters, §9 Round 3 |
 | **R9** | 3 | Every character has the same movement and hitbox as the Hacker, and nothing else breaks | §3.6, §5 Characters, §9 Round 3 |
-| **R10** | 3 | Skins don't save: bought characters (and the equipped one) last only until the page is reloaded or closed. The shards spent on them stay spent (user's answer, 2026-11-19) | §4 Shop, §9 Round 3 |
+| **R10** | 3 | ~~Skins don't save~~ **Superseded by R19 (Round 5).** Was: skins don't save: bought characters (and the equipped one) last only until the page is reloaded or closed. The shards spent on them stay spent (user's answer, 2026-11-19) | §4 Shop, §9 Round 3 |
 | **R11** | 4 | Three power-ups: a **bazooka** that destroys obstacles, **double score**, and **phase** (pass through obstacles) | §3.8, §9 Round 4 |
 | **R12** | 4 | The bazooka has one shot, which destroys the next row of obstacles. The player fires it with a key, **F** (user's answer, 2026-11-19) | §3.3, §3.8, §9 Round 4 |
-| **R13** | 4 | Double score and phase each last 30 seconds. Double score doubles all points (distance and shard points), not the shard count (user's answer, 2026-11-19) | §3.8, §9 Round 4 |
+| **R13** | 4 | Double score lasts 30 seconds (phase did too until Round 5; now **5 s, R17**). Double score doubles all points (distance and shard points), not the shard count (user's answer, 2026-11-19) | §3.8, §9 Round 4 |
 | **R14** | 4 | Power-ups are picked up off the ground | §3.8, §9 Round 4 |
 | **R15** | 4 | Where power-ups spawn is random, and they're rare: one **reaches the player every 30 s**, the first about 30 s into a run; its type and lane are random (user's change, 2026-11-19, replacing "about every 45–60 s", which in play put the first one 46–74 s in, so most runs never saw one) | §3.8, §9 Round 4 |
 | **R16** | 4 | Nothing breaks, and every power-up does what it's supposed to. Different power-ups can be active at once; picking one up again resets its timer to 30 s (user's answer, 2026-11-19) | §3.8, §7.3, §9 Round 4 |
+| **R17** | 5 | Phase is too strong: it lasts **5 seconds** (was 30). Double score stays 30 s, and the 1 s grace as phase ends stays (user's answers, 2026-11-20) | §3.8, §9 Round 5 |
+| **R18** | 5 | The next power-up to spawn is never the same type as the one before it. This holds whether or not the player picked the earlier one up (user's answer, 2026-11-20: "never two in a row") | §3.8, §9 Round 5 |
+| **R19** | 5 | Bought skins are saved after exiting the game: which characters you own **and which one is equipped** survive a reload or browser restart (user's answer, 2026-11-20). Replaces R10 | §4 Shop, §9 Round 5 |
+| **R20** | 5 | Skins cost more: the **Android costs 300** shards and the **Alien 600** (was 100 / 200; user's answer, 2026-11-20) | §4 Shop, §9 Round 5 |
 
 ### Non-goals
 - Multiplayer, accounts, online leaderboards
@@ -76,7 +80,7 @@ endless-runner/
 │   │   ├── settings.js # Settings (mute, quality) parsing and load/save under neonWasteland.settings (ADR-0015, ADR-0016)
 │   │   ├── shards.js   # Data-shard placement between rows, pickup, pool (ADR-0016)
 │   │   ├── shardbank.js # Lifetime shard total: parsing, load/save, banking a run's shards, spending (Round 2–3, docs/decisions/0001, 0002)
-│   │   ├── shop.js     # Character catalogue, prices, session-only ownership, buy/equip (Round 3, docs/decisions/0002)
+│   │   ├── shop.js     # Character catalogue, prices, owned/equipped (saved since Round 5), buy/equip (docs/decisions/0002, 0007)
 │   │   ├── powerups.js # Power-up pickups (placement, pickup), the bazooka shot, double-score and phase timers (Round 4, docs/decisions/0004, 0005, 0006)
 │   │   ├── juice.js    # Camera-shake trauma, landing squash, near-miss flash (ADR-0015)
 │   │   ├── particles.js # Pooled spark particles (ADR-0015)
@@ -191,18 +195,18 @@ Exact rules (ADR-0011):
 - **Data shards** (Phase 8, ADR-0016): glowing blue diamonds in short lines (3–5, 2.2 apart) in the open stretch between two obstacle rows. About half the gaps get a line, in a lane that isn't BLOCKed in the next row (preferably one open in both rows). Each shard is worth **25 × the current multiplier**. They sit at waist height (y 0.45–1.25): running or sliding through collects them, jumping over misses them. They are always optional: they never overlap an obstacle (each is kept a full row margin clear) and use their own seeded RNG, so the obstacle sequence and its fairness are unchanged. The HUD and the game-over screen show the shard count.
 - **Lifetime shard total** (Round 2, R4): every shard collected is added to a saved total that survives closing the browser, the same way the high score does. The menu shows the total; the game-over screen shows this run's shards and the new total. The total doesn't change the score. Since Round 3 it is spent in the **shop** (§4) to buy characters.
 
-### 3.8 Power-ups (Round 4, R11–R16; docs/decisions/0004, 0005, 0006)
+### 3.8 Power-ups (Round 4, R11–R16; Round 5, R17–R18; docs/decisions/0004, 0005, 0006, 0008)
 Three power-ups lie on the road now and then. They last only for the current run: nothing about them is saved, and every new run starts with none.
 
 | Power-up | Effect |
 |---|---|
 | **Bazooka** | You carry **one shot**. Press `F` to fire it: it destroys every obstacle in the **next row**, the closest row that can still hit you (one you're passing through counts, so it can save you at the last moment). If no row is ahead, the shot is kept. Picking up another while holding one changes nothing: you still hold one shot. |
 | **Double score** | For **30 s**, every point you earn counts double: distance points and shard points. The number of shards (and the lifetime total) is not doubled. |
-| **Phase** | For **30 s**, obstacles can't hit you: you run straight through them (no head-on catch, no stumble). When it runs out, every obstacle less than **1 s** ahead (at the current speed) is also passed through, so a phase never ends with an unavoidable hit. |
+| **Phase** | For **5 s** (30 s before Round 5, R17), obstacles can't hit you: you run straight through them (no head-on catch, no stumble). When it runs out, every obstacle less than **1 s** ahead (at the current speed) is also passed through, so a phase never ends with an unavoidable hit. |
 
 - **Picked up off the ground (R14):** each power-up is a small glowing case standing on the road in one lane (pickup box 1.2 wide, 1.0 tall, 1.0 deep, from the road up). Running or sliding through it picks it up; jumping over it misses it.
-- **Placement (R15):** like shards, a power-up goes in the open stretch between two rows, centred and a full row margin clear of both, in a lane that's open in both rows if possible (otherwise one open in the next row), never on a shard line. **Timing is by arrival, on a fixed clock:** pickups are scheduled to reach the player (pass under them) at 30, 60, 90 s… of run time. Each goes in the first gap with room that the player will reach at or after its slot, working out the arrival time from the speed ramp, and it's placed far enough up the road to come out of the fog (in practice about 11 s ahead). It can only sit in a gap between rows, so it arrives 0–3 s after its slot (never before), and waiting never pushes later slots back. The type and the lane are picked at random, each type equally likely (docs/decisions/0006). Power-ups use **their own seeded RNG**, so the obstacles and shards of every seed are unchanged.
-- **Together (R16):** different power-ups can be active at once. Picking up double score or phase while it's already active resets its timer to 30 s. Timers count only simulated run time: they stop while paused and during the catch beat.
+- **Placement (R15):** like shards, a power-up goes in the open stretch between two rows, centred and a full row margin clear of both, in a lane that's open in both rows if possible (otherwise one open in the next row), never on a shard line. **Timing is by arrival, on a fixed clock:** pickups are scheduled to reach the player (pass under them) at 30, 60, 90 s… of run time. Each goes in the first gap with room that the player will reach at or after its slot, working out the arrival time from the speed ramp, and it's placed far enough up the road to come out of the fog (in practice about 11 s ahead). It can only sit in a gap between rows, so it arrives 0–3 s after its slot (never before), and waiting never pushes later slots back. The type and the lane are picked at random (docs/decisions/0006). **No repeats (R18, Round 5):** a pickup is never the same type as the one placed before it, whether or not that one was picked up: the first pickup of a run is any of the three, each one after is one of the other two, 50/50 (docs/decisions/0008). Over a run each type still turns up about a third of the time. Power-ups use **their own seeded RNG**, so the obstacles and shards of every seed are unchanged.
+- **Together (R16):** different power-ups can be active at once. Picking up double score or phase while it's already active resets its timer to its full length (30 s for double score; phase can't come twice in a row since R18, but its rule is the same, back to 5 s). Timers count only simulated run time: they stop while paused and during the catch beat.
 - **HUD:** a row under the score shows each active power-up: `BAZOOKA [F]`, `2X 27`, `PHASE 12` (seconds left). A timer blinks in its last 3 s.
 - **Looks:** the cases avoid the obstacle cue colours (amber / white / red) and the shards' blue: the bazooka is magenta, double score is lime, phase is violet. A thin, fading beam of the same colour rises above each pickup, so a rare one is easy to spot far ahead (it starts above the pickup box and can't be touched). Firing draws a short rocket streak to the row and blows each obstacle apart in sparks. While phasing, the runner has a faint violet glow. A held bazooka is drawn on the runner's shoulder.
 
@@ -222,7 +226,7 @@ All UI is HTML/CSS layered on top of the canvas (not drawn in three.js). It uses
 | Screen | Contents |
 |---|---|
 | **Main menu** | Title, **Play** button (also `Enter`/`Space`), **Shop** button, current high score, lifetime shard total, controls cheat-sheet, **Sound on/off** toggle (also `M`), **Quality high/low** toggle |
-| **Shop** (Round 3) | Shard total, one card per character (name, short description, price or OWNED / EQUIPPED, a Buy or Equip button), a note that bought characters last until the game is closed, **Back** (also `Esc`/`P`). The equipped character stands on the road behind the panel. |
+| **Shop** (Round 3) | Shard total, one card per character (name, short description, price or OWNED / EQUIPPED, a Buy or Equip button), a note that bought characters are saved (Round 5; Round 3's note said they last until the game is closed), **Back** (also `Esc`/`P`). The equipped character stands on the road behind the panel. |
 | **HUD** (while playing) | Score (top-left) with the shard count under it and the active power-ups under that (Round 4, §3.8), high score (top-right; tracks the live score once you beat it), sound and pause buttons |
 | **Pause** | Dimmed overlay, **Resume** (also `Esc`/`P`/`Enter`), **Restart**, **Main Menu**, **Sound on/off**, **Quality high/low**. The game also auto-pauses when the tab or window loses focus, but only mid-run. |
 | **Game over** | "CAUGHT" heading, final score, shards collected this run, lifetime shard total, high score, a "NEW HIGH SCORE!" badge when earned, **Play Again** (also `Enter`/`Space`, after a 0.6 s delay so a mashed jump can't skip the screen), **Main Menu** |
@@ -239,11 +243,14 @@ While paused, the game loop keeps rendering but stops simulating. The paused fra
 - Banking re-reads the stored total first and adds to the larger of it and the in-memory total, so a second tab's shards aren't overwritten, and a session without storage still keeps its total in memory.
 - Same `try/catch` rule as the high score: without storage the game works and the total lasts for the session only.
 
-### Shop (Round 3, R7–R10; docs/decisions/0002, 0003)
-- Characters: **Hacker** (free, owned from the start, equipped by default), **Android** (100 shards), **Alien** (200 shards). Prices live in `CONFIG`.
+### Shop (Round 3, R7–R10; Round 5, R19–R20; docs/decisions/0002, 0003, 0007)
+- Characters: **Hacker** (free, owned from the start, equipped by default), **Android** (300 shards), **Alien** (600 shards). Prices live in `CONFIG`; they were 100 / 200 until Round 5 (R20).
 - **Buy:** only from the shop, only if the lifetime total covers the price. Buying spends the price from the total, saves the new total at once (a click, never per frame), and equips the character. Like banking, spending re-reads the stored total first and spends from the larger of it and the in-memory total, so another tab's shards aren't lost. The total never goes below 0. A character can't be bought twice.
 - **Equip:** any owned character, with one click. It is used from the next run on (the shop is only reachable from the menu, so never mid-run).
-- **Not saved (R10):** which characters you own and which one is equipped live only in memory. Reloading or closing the page goes back to "Hacker only, Hacker equipped". The shards spent are **not** refunded: the saved total keeps the deduction. No new `localStorage` key is added.
+- **Saved (R19, Round 5; replaces R10):** which characters you own and which one is equipped are stored in `localStorage` under `neonWasteland.characters`, as JSON: `{"owned":["hacker","android"],"equipped":"android"}`. That is the fourth storage key (docs/decisions/0007). It's written only on a shop click: after a successful purchase (right after the spent total is saved) and when you equip a different character. It's never written during a run.
+  - **Loading:** unknown ids are dropped, the Hacker is always owned, and an equipped id that isn't owned falls back to the Hacker. Missing, garbage or unreadable storage gives "Hacker only, Hacker equipped" and the game still works (purchases then last for the session only, as in Round 3).
+  - **Other tabs:** like the shard total, saving first re-reads the stored list and keeps the union of owned characters, and entering the shop merges in characters bought in another tab. So a purchase is never lost to another tab's save. The equipped character is this tab's choice.
+  - Purchases from Round 3 were never saved, so there's nothing to migrate. The shards spent then stay spent.
 - The skin is cosmetic only (R9): movement, jump, slide, the hitbox and the run simulation never read it.
 
 ### Settings
@@ -276,11 +283,11 @@ The player runs as one of three characters (Round 3, R8). All three are built on
 - The camera sees his back, so his glowing accents are a visor that peeks out past the hood and a backpack LED strip. A dim cold light follows him so his outline stays readable (ADR-0012).
 - Animations done in code: run cycle (swing limbs with a sine wave), jump pose, slide pose (body tilted back, low), stumble.
 
-**Runner: "the Android"** (shop, 100 shards)
+**Runner: "the Android"** (shop, 300 shards; 100 before Round 5)
 - Brushed silver plating over dark graphite joints: a boxy chest plate, shoulder pads, a squared helmet head with a thin glowing eye band, a short antenna, and a back vent with a soft glow strip (what the camera sees). Cold and metallic; the silver keeps him readable against the night.
 - Like the Hacker, neither new runner has separate hand boxes: they would dip into the road in the slide pose.
 
-**Runner: "the Alien"** (shop, 200 shards)
+**Runner: "the Alien"** (shop, 600 shards; 200 before Round 5)
 - Muted green skin, a large domed head (wider than tall, never taller than the Hacker's hood), big black slanted eyes, thin green arms and legs, a dark grey-green vest, and a faint green glow line down the back.
 - Green is not an obstacle cue colour and stays desaturated, so the cues (amber / white / red) still own the brightest, warmest colours.
 
@@ -454,6 +461,19 @@ Requirements R11–R16 (§1). Decision records: `docs/decisions/0004-powerups-in
   - [x] R13: double score doubles distance and shard points (not the shard count) for 30 s; phase lets you run through any obstacle (no catch, no stumble) for 30 s, and nothing within 1 s ahead can hit you as it ends; both stop while paused *(Node: exact ×2, ends at 30 s, every obstacle type and a side clip passed through, 1 s grace, timers frozen in the catch beat. Browser: points rate ×1.97–2.00; 6 s phasing with no input and no catch, obstacles passed through; pause froze the timer; after phase ended, obstacles caught the runner again)*
   - [x] R15: a power-up reaches the player every 30 s (the first about 30 s in, then on a fixed 30 s clock, each 0–3 s after its slot); its type and lane are random (seeded), each type about a third of the time; the obstacle and shard sequences of every seed are unchanged *(re-verified 2026-11-19 after the user's change: `node --test` 335/335. Node: pickup k reaches the player within 30k…30k+3 s on 8 seeds × 400 s, every slot filled, each placed ≥ 3 s before it arrives; type shares, all lanes, deterministic per seed; spawner and shard RNG states identical to a run without power-ups. Browser (`?debug&seed=4`): the first pickup was on the road from 19.2 s and reached the player at 30.8 s; the second was on the road from 51.2 s and was picked up at about 60 s; 0 console errors)*
   - [x] R16: power-ups can overlap; picking up an active timed one resets it to 30 s; a new run starts with none; every earlier test still passes; no per-frame allocations or storage writes; no new storage key; still 60 fps at max speed *(Node: all three at once, re-pick resets to 30, one bazooka shot only, reset equals fresh; all 299 earlier tests pass; the carried bazooka never changes a runner's outline. Browser: Play Again starts with none; 0 storage writes during play; keys unchanged; every request local; 0 console errors or warnings; 96 draw calls at speed 35. Frame rate: 58.4 fps at speed 35, the same as the pre-Round-4 build (`bbb1c31`) measured the same way in the same session (58.1), so no regression. This machine's headless Chrome topped out at about 58 that day, where earlier rounds measured 60.1–60.3)*
+
+### Round 5: Balance and saved skins
+Requirements R17–R20 (§1). Decision records: `docs/decisions/0007-save-characters-under-own-key.md`, `docs/decisions/0008-no-repeat-by-drawing-from-the-other-two.md`. Rules in §3.8 and §4 "Shop".
+- `js/logic/config.js`: `POWERUP_PHASE_DURATION: 5` (`POWERUP_DURATION` stays 30, for double score); `PRICE_ANDROID: 300`, `PRICE_ALIEN: 600`.
+- `js/logic/powerups.js`: phase uses its own duration; placement remembers the last placed type (`lastPlaced`) and draws the next one from the other two.
+- `js/logic/shop.js`: `CHARACTERS_KEY`, `parseShop()`, `loadShop()`, `saveShop()`, `mergeStoredShop()`. A successful `buyCharacter()` saves ownership; `equipCharacter(shop, id, storage)` saves the equipped character.
+- `game.js`: the shop is loaded from storage at startup (the menu shows the equipped runner straight away); entering the shop merges other tabs' purchases; the shop note says purchases are saved.
+- **Acceptance:**
+  - [ ] R17: picking up phase gives exactly 5 s of passing through obstacles, then obstacles hit again; the 1 s grace still applies as it ends; double score still lasts 30 s; the HUD counts phase down from 5
+  - [ ] R18: on every seed, no two consecutive pickups of a run have the same type (picked up or missed); after the first, each of the other two types is about equally likely; each type is still about a third of all pickups; obstacles and shards of every seed are unchanged
+  - [ ] R19: after buying and equipping, a reload (or browser restart) still owns those characters and has the same one equipped, on the menu road and in the next run; garbage or missing storage falls back to the Hacker; a purchase in another tab isn't lost; the only new key is `neonWasteland.characters`; it's never written during a run
+  - [ ] R20: the Android costs 300 shards and the Alien 600; the shop shows and charges those prices
+  - [ ] Nothing else breaks: every earlier test passes (the ones whose requirement changed are updated, and each change is explained); no per-frame allocations or storage writes; frame rate unchanged against the Round 4 build
 
 ---
 
