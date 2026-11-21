@@ -261,7 +261,8 @@ export const CONFIG = Object.freeze({
   // --- Power-ups (Round 4, R11–R16; SPEC §3.8, docs/decisions/0004) ---
   // Pickups stand on the road between rows (like shards, with their own RNG,
   // so obstacles and shards are unchanged). Run state only: never saved.
-  POWERUP_DURATION: 30, // seconds of double score / phase (R13)
+  POWERUP_DURATION: 30, // seconds of double score (R13)
+  POWERUP_PHASE_DURATION: 5, // seconds of phase (Round 5, R17: was 30, too strong)
   POWERUP_FIRST: 30, // seconds into a run when the first pickup reaches the player (R15, user's change 2026-11-19)...
   POWERUP_INTERVAL: 30, // ...and then one reaches the player every this many seconds (docs/decisions/0006)
   POWERUP_SCORE_MULT: 2, // double score: every point gained counts this many times

@@ -18,7 +18,8 @@ import {
 } from '../js/logic/powerups.js';
 
 const STEP = CONFIG.SIM_STEP;
-const DUR = CONFIG.POWERUP_DURATION;
+const DUR = CONFIG.POWERUP_DURATION; // double score (30 s)
+const PHASE_DUR = CONFIG.POWERUP_PHASE_DURATION; // phase: 30 s in Round 4, 5 s since Round 5 (R17)
 
 /** A fresh run with nothing on the road: no obstacles, shards or power-ups, and none due for a long time. */
 function emptyRun(seed = 4) {
@@ -84,7 +85,7 @@ test('R11: picking each power-up turns on its effect', () => {
   assert.equal(pu.doubleTime, DUR);
   assert.equal(scoreFactor(pu, CONFIG), 2);
   applyPower(pu, POWER.PHASE, CONFIG);
-  assert.equal(pu.phaseTime, DUR);
+  assert.equal(pu.phaseTime, PHASE_DUR);
   assert.equal(phasing(pu), true);
 });
 
@@ -398,7 +399,7 @@ test('R12: a fire request during the catch beat does nothing', () => {
   assert.equal(o.active, true);
 });
 
-// --- R13: double score and phase last 30 s ------------------------------------------------
+// --- R13: double score lasts 30 s; phase lasted 30 s (5 s since Round 5, R17) ----------------
 
 test('R13: double score doubles distance points, exactly, for 30 s', () => {
   const a = emptyRun();
@@ -441,30 +442,31 @@ test('R13: double score doubles shard points but not the shard count', () => {
   assert.ok(b.score - 2 * (a.score - shardScore(1, 20, CONFIG)) > shardScore(1, 20, CONFIG) * 1.5);
 });
 
-test('R13: phase lets you run straight through every obstacle type for 30 s: no catch, no stumble', () => {
+// The course is 10 units per obstacle (was 25) so all of it fits in a 5 s phase at the start speed.
+test('R13/R17: phase lets you run straight through every obstacle type while it lasts: no catch, no stumble', () => {
   const run = emptyRun();
   applyPower(run.powerups, POWER.PHASE, CONFIG);
-  let s = 20;
+  let s = 8;
   for (const type of [OB.BLOCK, OB.LOW, OB.HIGH, OB.BLOCK]) {
     place(run, type, 1, s, s);
-    s += 25;
+    s += 10;
   }
   // A side clip too: change lanes into a BLOCK.
   place(run, OB.BLOCK, 0, s, s);
   while (s - run.scroll > 0.8 && !run.caught) stepRun(run, STEP, CONFIG);
   queueLaneMove(run.player, -1, CONFIG);
-  stepUntil(run, s + 10);
+  stepUntil(run, s + 4);
   assert.equal(run.caught, false);
   assert.equal(run.chaser.catching, false);
   assert.equal(run.chaser.stumbles, 0);
-  assert.ok(run.elapsed < DUR, 'all inside the 30 s');
+  assert.ok(run.elapsed < PHASE_DUR, `all inside the phase (${run.elapsed.toFixed(2)} s)`);
   assert.ok(phasing(run.powerups));
 });
 
-test('R13: phase ends after 30 s, and then obstacles hit again', () => {
+test('R13/R17: phase ends when its time is up (5 s), and then obstacles hit again', () => {
   const run = emptyRun();
   applyPower(run.powerups, POWER.PHASE, CONFIG);
-  stepFor(run, DUR - 0.01);
+  stepFor(run, PHASE_DUR - 0.01);
   assert.ok(phasing(run.powerups));
   stepFor(run, 0.02);
   assert.equal(phasing(run.powerups), false);
@@ -477,7 +479,7 @@ test('R13: phase ends after 30 s, and then obstacles hit again', () => {
 test('R13: as phase ends, anything less than 1 s ahead is passed through; further out is solid', () => {
   const run = emptyRun();
   applyPower(run.powerups, POWER.PHASE, CONFIG);
-  stepFor(run, DUR - 0.2);
+  stepFor(run, PHASE_DUR - 0.2);
   const v = run.speed;
   // At phase end (0.2 s from now) these are 0.6 s and 2.5 s ahead.
   const near = place(run, OB.BLOCK, 1, run.scroll + v * 0.8, 7);

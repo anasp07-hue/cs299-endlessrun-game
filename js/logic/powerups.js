@@ -4,7 +4,7 @@
 // Three power-ups stand on the road now and then:
 // - BAZOOKA: one shot; firing it (F) destroys every obstacle of the next row.
 // - DOUBLE:  every point gained counts double for POWERUP_DURATION seconds.
-// - PHASE:   obstacles can't hit you for POWERUP_DURATION seconds.
+// - PHASE:   obstacles can't hit you for POWERUP_PHASE_DURATION seconds (5 s since Round 5, R17).
 //
 // Placement works like the shards (ADR-0016): it reads the spawner's gap log
 // and puts a pickup in the open stretch between two rows, clear of both and
@@ -14,7 +14,8 @@
 // POWERUP_FIRST, then every POWERUP_INTERVAL seconds after (30, 60, 90 s…).
 // Each goes in the first suitable gap the player will reach at or after its
 // slot, so it arrives a moment after (never before); the schedule itself
-// never drifts.
+// never drifts. No repeats (Round 5, R18; docs/decisions/0008): a pickup is
+// never the same type as the one placed before it, picked up or not.
 //
 // Like obstacles and shards, a pickup stores `s` (track position); its z is `scroll - s`.
 
@@ -46,6 +47,7 @@ export function createPowerups(cfg, seed = 0) {
     placed: 0, // pickups placed this run
     picked: 0, // pickups collected this run
     lastType: POWER.NONE, // type of the latest pickup collected
+    lastPlaced: POWER.NONE, // type of the latest pickup placed: the next is never the same (R18)
     dropped: 0, // pickups not placed because the pool was full (should stay 0)
     // Effects
     bazooka: false, // holding the one shot
@@ -76,6 +78,7 @@ export function resetPowerups(pu, cfg, seed) {
   pu.placed = 0;
   pu.picked = 0;
   pu.lastType = POWER.NONE;
+  pu.lastPlaced = POWER.NONE;
   pu.dropped = 0;
   pu.bazooka = false;
   pu.fireRequested = false;
@@ -134,6 +137,22 @@ function countLanes(mask) {
   return n;
 }
 
+/**
+ * The type for random draw `u` in [0, 1): any of the three for the first
+ * pickup of a run, else one of the two that aren't `last`, equally likely
+ * (R18). One draw either way, so the RNG stream keeps its length.
+ */
+export function drawType(u, last) {
+  if (last === POWER.NONE) return POWER_TYPES[Math.floor(u * POWER_TYPES.length)];
+  let pick = Math.floor(u * (POWER_TYPES.length - 1));
+  for (let i = 0; i < POWER_TYPES.length; i++) {
+    if (POWER_TYPES[i] === last) continue;
+    if (pick === 0) return POWER_TYPES[i];
+    pick--;
+  }
+  return POWER_TYPES[0]; // unreachable for a valid `last`
+}
+
 /** Try to place the due pickup in gap [from, to] (centred). Returns true if placed. */
 function tryPlace(pu, sh, from, to, prevOpen, nextOpen, cfg) {
   const clear = powerupClearance(cfg);
@@ -158,7 +177,8 @@ function tryPlace(pu, sh, from, to, prevOpen, nextOpen, cfg) {
   const o = pu.slots[slot];
   o.active = true;
   o.lane = nthLane(mask, Math.floor(pu.rng.next() * n));
-  o.type = POWER_TYPES[Math.floor(pu.rng.next() * POWER_TYPES.length)];
+  o.type = drawType(pu.rng.next(), pu.lastPlaced);
+  pu.lastPlaced = o.type;
   o.s = (from + to) / 2;
   pu.active++;
   pu.placed++;
@@ -211,7 +231,7 @@ export function setPowerupBox(box, lane, z, cfg) {
 export function applyPower(pu, type, cfg) {
   if (type === POWER.BAZOOKA) pu.bazooka = true; // still one shot if you already held one
   else if (type === POWER.DOUBLE) pu.doubleTime = cfg.POWERUP_DURATION;
-  else if (type === POWER.PHASE) pu.phaseTime = cfg.POWERUP_DURATION;
+  else if (type === POWER.PHASE) pu.phaseTime = cfg.POWERUP_PHASE_DURATION;
 }
 
 /** Collect every pickup touching `playerBox` and apply it. Returns how many were collected this step. */
