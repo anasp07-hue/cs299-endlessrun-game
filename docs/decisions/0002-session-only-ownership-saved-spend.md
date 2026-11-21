@@ -1,6 +1,6 @@
 # 0002: Keep bought characters in memory only, but save the shards spent on them at once
 
-- **Status:** Accepted
+- **Status:** Accepted. Keeping ownership in memory only (R10) is superseded by `0007-save-characters-under-own-key.md` (Round 5, R19); saving the spent total at once on the click still holds.
 - **Date:** 2026-11-19
 - **Round:** 3 (requirements R7, R10 in SPEC §1)
 - **Format:** Y-statement (see 0001).
