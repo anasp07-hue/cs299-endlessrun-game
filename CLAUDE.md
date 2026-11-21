@@ -57,6 +57,7 @@ Node is a **dev-only tool** for running tests. The game itself never needs Node,
 - Tests go in `tests/*.test.js` as ES modules using `node:test` and `node:assert/strict`. No test frameworks, no npm.
 - For round work, **each test name starts with the requirement ID it checks** (e.g. `test('R4: …')`).
 - **Never** delete, skip, or weaken a test just to get a pass. If a test is wrong, explain why before changing it.
+- When a round **changes or reverses an earlier requirement** (e.g. R19 replacing R10, phase 30 s → 5 s), update or replace the old tests that encode it. Say which and why in the test file (a pointer comment) and in the commit message. Tests of untouched behaviour stay as they are.
 - Report test results honestly. If something fails or wasn't run, say so.
 - **Loops over a simulated run must also stop on `run.caught`** (e.g. `while (x - run.scroll > d && !run.caught)`). A caught run's scroll freezes, so a loop waiting on distance never ends. A synchronous hang blocks the event loop, so `--test-timeout` can't stop it and `node --test` prints nothing. To find one, run the file under `perl -e 'alarm 15; exec @ARGV' node …`, logging each test name as it starts.
 - **Power-ups appear in every simulated run** (one every 30 s, from 30 s). A bot or long-run test of another mechanic (stumbles, scoring, spacing) should switch them off with `run.powerups.nextAt = Infinity` after `createRun()`. Obstacles and shards are unchanged, because power-ups have their own RNG.
@@ -66,6 +67,7 @@ Node is a **dev-only tool** for running tests. The game itself never needs Node,
 - `game.js` and the rendering modules import this logic. They don't reimplement it.
 - Logic modules must not touch `window`, `document`, `localStorage`, or `THREE`. Pass values in, get values out. Randomness comes from a seeded RNG that is passed in.
 - Tuning numbers go in one `CONFIG` object (see the `game-systems` skill).
+- Phase lasts `POWERUP_PHASE_DURATION` (5 s since Round 5), separate from `POWERUP_DURATION` (30 s, double score). Power-up types never repeat back to back (`pu.lastPlaced`, decision 0008).
 - **Skins are cosmetic.** Every runner is dressed on the shared skeleton (`RIG`, `createSkeleton()`) and posed by the shared pose functions. Rules modules never import `shop.js` or `characters.js` and never read the equipped character. `tests/round3-characters.test.js` measures every runner against the Hacker's height and width.
 
 ### 6. Decision records
@@ -98,13 +100,15 @@ Load the matching skill **before** starting work it covers:
 - Runs fully offline: three.js is vendored in `libs/`, with no CDNs, web fonts, or remote assets.
 - No build tools, frameworks, TypeScript, or npm packages in the game.
 - No allocations in per-frame code (object pooling). The game must hold 60 fps.
-- No `localStorage` reads or writes in per-frame code. Saves (`neonWasteland.highScore`, `.settings`, `.shardTotal`) happen only at checkpoints (state changes, tab hidden, `pagehide`, a shop purchase click). Keep the `neonWasteland.` prefix (ADR-0010).
-- Those three are the **only** storage keys. Owned and equipped characters are never saved, in any kind of storage (R10, decision 0002). Power-ups are run state only, also never saved (R16). `tests/round3-wiring.test.js` fails on any other `neonWasteland.<key>`, even in a comment.
+- No `localStorage` reads or writes in per-frame code. Saves (`neonWasteland.highScore`, `.settings`, `.shardTotal`, `.characters`) happen only at checkpoints (state changes, tab hidden, `pagehide`, a shop buy or equip click). Keep the `neonWasteland.` prefix (ADR-0010).
+- Those four are the **only** storage keys. Since Round 5, owned and equipped characters are saved as JSON under `neonWasteland.characters`, only through `shop.js` on a shop click (R19, decision 0007, replacing R10 / 0002). Power-ups are run state only, never saved (R16). `tests/round5-wiring.test.js` fails on any other `neonWasteland.<key>`, even in a comment.
 - No network in game code: no `http(s)://` text (even in comments), `fetch`, XHR, or sockets in `game.js`, `js/`, `index.html`, or `style.css`. `tests/round2-wiring.test.js` enforces this.
 - Smoke-test in a throwaway browser profile: `?debug` runs save real high scores and shard totals to `localStorage`. The recipe:
   - Start `python3 serve.py 8765 &`. The user may already have their own `serve.py` on port 8000: don't kill it, use a spare port and stop only yours.
   - Start Chrome headless with `--headless=new --remote-debugging-port=9222 --user-data-dir=<scratchpad>/chrome --autoplay-policy=no-user-gesture-required --use-angle=metal --enable-gpu --ignore-gpu-blocklist --window-size=1280,720 about:blank`.
   - Drive it with a Node 24 script, which has built-in `fetch` and `WebSocket`: get the page from `127.0.0.1:9222/json/new`, then use `Runtime.evaluate` on `window.__neon` (`?debug&seed=4`), and `Input.dispatchMouseEvent` / `Input.dispatchKeyEvent` for real clicks and keys.
+  - `STATE` values are uppercase strings (`'MENU'`, `'PLAYING'`, `'SHOP'`…): compare against those, or use `__neon.STATE`.
+  - The profile keeps what a smoke run saves, including bought and equipped skins, per port. Clear `localStorage` at the start of a run, and for fps comparisons make sure both builds use the same skin (the skin changes the draw count).
   - Kill Chrome and `serve.py` afterwards.
   - Headless fps varies by machine and day (about 58 in Round 4, 60 before). Judge a frame-rate change against the previous build measured the same way in the same session: check it out with `git worktree add --detach <scratchpad>/base <commit>`, serve it on another port, then remove the worktree.
 - **`game.js` runs top to bottom at load, and Node never runs it.** Using a `const` (a material, a mesh) above the line that declares it throws at startup, Play does nothing, and every Node test still passes. Only the browser smoke test catches it, so run one after any `game.js` change.
